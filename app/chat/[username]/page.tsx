@@ -581,7 +581,7 @@ export default function ChatPage() {
       <div 
         className="absolute inset-0 z-0"
         style={{
-          backgroundImage: `url('/images/chat-bg.jpg')`,
+          backgroundImage: `url('/images/chat-bg.png')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
