@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FiLogOut, FiUsers, FiSearch, FiMoreVertical } from "react-icons/fi";
+import { FiSearch, FiMoreVertical } from "react-icons/fi";
 import { connectSocket, restoreSocketSession } from "@/lib/socket";
 import { useAuth } from "@/hooks/useAuth";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -50,7 +50,6 @@ export default function ChatListPage() {
     if (!isAuthenticated || !username) return;
 
     let active = true;
-    setIsLoading(false);
     const socket = connectSocket();
     socketRef.current = socket;
 
@@ -61,7 +60,9 @@ export default function ChatListPage() {
     });
 
     const onUsersList = (data: User[]) => {
+      if (!active) return;
       updateUsersList(data);
+      setIsLoading(false); // <--- بعد از دریافت لیست، بارگذاری تمام می‌شود
     };
 
     const onReceiveMessage = (msg: any) => {
@@ -119,16 +120,15 @@ export default function ChatListPage() {
 
     const onUserTyping = ({ sender, receiver, isTyping }: any) => {
       if (receiver === username) {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.username === sender ? { ...u, isTyping } : u
-          )
-        );
+        const existingTimeout = typingTimeoutsRef.current.get(sender);
+        if (existingTimeout) clearTimeout(existingTimeout);
         
         if (isTyping) {
-          const existingTimeout = typingTimeoutsRef.current.get(sender);
-          if (existingTimeout) clearTimeout(existingTimeout);
-          
+          setUsers((prev) =>
+            prev.map((u) =>
+              u.username === sender ? { ...u, isTyping: true } : u
+            )
+          );
           const timeout = setTimeout(() => {
             setUsers((prev) =>
               prev.map((u) =>
@@ -137,7 +137,16 @@ export default function ChatListPage() {
             );
             typingTimeoutsRef.current.delete(sender);
           }, 3000);
-          
+          typingTimeoutsRef.current.set(sender, timeout);
+        } else {
+          const timeout = setTimeout(() => {
+            setUsers((prev) =>
+              prev.map((u) =>
+                u.username === sender ? { ...u, isTyping: false } : u
+              )
+            );
+            typingTimeoutsRef.current.delete(sender);
+          }, 2000);
           typingTimeoutsRef.current.set(sender, timeout);
         }
       }
@@ -162,7 +171,7 @@ export default function ChatListPage() {
     };
   }, [isAuthenticated, username, updateUsersList]);
 
-  if (authLoading || isLoading) {
+  if (authLoading) {
     return <LoadingSpinner />;
   }
 
@@ -173,14 +182,12 @@ export default function ChatListPage() {
 
   return (
     <div className="h-[100dvh] bg-gradient-to-br from-[#0a0a0a] via-[#14141e] to-[#1a1a2e] text-white flex flex-col overflow-hidden">
-      {/* هدر شیشه‌ای با ارتفاع بیشتر */}
+      {/* هدر شیشه‌ای */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 bg-white/5 backdrop-blur-xl border-b border-white/5 shadow-lg shadow-black/20">
-        {/* سمت چپ: نام برنامه */}
         <div className="text-xl font-bold text-white/90 tracking-wide">
           Chat App
         </div>
 
-        {/* سمت راست: دو آیکون */}
         <div className="flex items-center gap-3">
           <button className="p-2 rounded-full hover:bg-white/10 transition-colors duration-200 text-gray-300 hover:text-white">
             <FiSearch size={20} />
@@ -191,7 +198,14 @@ export default function ChatListPage() {
         </div>
       </div>
 
-      <UsersList users={users} currentUser={username} />
+      {/* محتوای اصلی */}
+      {isLoading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <LoadingSpinner />
+        </div>
+      ) : (
+        <UsersList users={users} currentUser={username} />
+      )}
     </div>
   );
 }

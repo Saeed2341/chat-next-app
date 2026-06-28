@@ -42,7 +42,7 @@ export default function ChatHeader({
         <div className="font-bold text-lg text-white drop-shadow-lg">{otherUsername}</div>
         <div className="text-xs">
           {otherUserTyping ? (
-            <div className="flex items-center gap-1 text-green-300 justify-end">
+            <div className="flex items-center gap-1 text-green-300 justify-start">
               <span>در حال نوشتن...</span>
             </div>
           ) : (

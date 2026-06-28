@@ -3,7 +3,7 @@
 import { BsCheck, BsCheckAll } from "react-icons/bs";
 import { HiOutlineClock } from "react-icons/hi";
 import { FiMapPin } from "react-icons/fi";
-import { useRef, useEffect } from "react";
+import { useEffect, useState, memo } from "react";
 
 interface Message {
   _id?: string;
@@ -30,17 +30,18 @@ interface MessageBubbleProps {
   onMessageClick: (message: Message, event: React.MouseEvent) => void;
 }
 
-export default function MessageBubble({
+function MessageBubble({
   message,
   isOwnMessage,
   currentUser,
   onReplyClick,
   onMessageClick,
 }: MessageBubbleProps) {
-  const isFirstRender = useRef(true);
+  const [shouldAnimate, setShouldAnimate] = useState(true);
 
   useEffect(() => {
-    isFirstRender.current = false;
+    const timer = setTimeout(() => setShouldAnimate(false), 100);
+    return () => clearTimeout(timer);
   }, []);
 
   const formatTime = (date: any) => {
@@ -78,7 +79,7 @@ export default function MessageBubble({
     <div
       id={`message-${message._id}`}
       className={`flex ${isOwnMessage ? "justify-start" : "justify-end"} ${
-        isFirstRender.current ? "animate-fade-in" : ""
+        shouldAnimate ? "animate-fade-in" : ""
       } group`}
       onClick={(e) => onMessageClick(message, e)}
     >
@@ -95,7 +96,6 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* بخش پاسخ به پیام */}
         {message.replyTo && message.replyTo.messageId && (
           <div
             className={`mb-1 pb-1 pr-2 cursor-pointer hover:opacity-80 transition ${
@@ -119,14 +119,10 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* کانتینر اصلی: متن + زمان با flex-wrap */}
         <div className="flex flex-row-reverse flex-wrap items-baseline justify-end gap-x-1 gap-y-0">
-          {/* متن پیام */}
           <span className="text-[15px] text-white/90 break-words whitespace-pre-wrap text-right">
             {message.text}
           </span>
-
-          {/* زمان و وضعیت */}
           <span className="flex items-center gap-0.5 text-[10px] text-gray-400 leading-none shrink-0">
             <span>{formatTime(message.time || message.createdAt)}</span>
             {isOwnMessage && (
@@ -146,3 +142,5 @@ export default function MessageBubble({
     </div>
   );
 }
+
+export default memo(MessageBubble);
