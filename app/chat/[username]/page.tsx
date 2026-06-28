@@ -508,10 +508,8 @@ export default function ChatPage() {
         }
       };
 
-      // اصلاح تایمر تایپ
       const onUserTyping = ({ sender, receiver, isTyping }: any) => {
         if (sender === otherUsername && receiver === currentUser) {
-          // تایمر قبلی رو پاک کن
           if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
             typingTimeoutRef.current = null;
@@ -578,87 +576,102 @@ export default function ChatPage() {
   if (!isAuthenticated) return null;
 
   return (
-    <div className="chat-screen h-[100dvh] bg-gradient-to-br from-[#0a0a0a] via-[#14141e] to-[#1a1a2e] text-white flex flex-col overflow-hidden relative">
-      {menuVisible && (
-        <MessageMenu
-          message={menuVisible.message}
-          isOwnMessage={menuVisible.message.sender === currentUser}
-          onCopy={handleCopyMessage}
-          onEdit={handleEditMessage}
-          onDelete={handleDeleteMessage}
-          onPin={handlePinMessage}
-          onReply={handleReply}
-          onClose={() => setMenuVisible(null)}
-          position={{ x: menuVisible.x, y: menuVisible.y }}
+    <div className="chat-screen h-[100dvh] text-white flex flex-col overflow-hidden relative">
+      {/* عکس پس‌زمینه */}
+      <div 
+        className="absolute inset-0 z-0"
+        style={{
+          backgroundImage: `url('/images/chat-bg.jpg')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      />
+      
+      {/* لایه تاریک ملایم */}
+      <div className="absolute inset-0 z-0 bg-black/50" />
+
+      <div className="relative z-10 flex flex-col h-full">
+        {menuVisible && (
+          <MessageMenu
+            message={menuVisible.message}
+            isOwnMessage={menuVisible.message.sender === currentUser}
+            onCopy={handleCopyMessage}
+            onEdit={handleEditMessage}
+            onDelete={handleDeleteMessage}
+            onPin={handlePinMessage}
+            onReply={handleReply}
+            onClose={() => setMenuVisible(null)}
+            position={{ x: menuVisible.x, y: menuVisible.y }}
+          />
+        )}
+
+        <ChatHeader
+          otherUsername={otherUsername}
+          otherUserOnline={otherUserOnline}
+          otherUserTyping={otherUserTyping}
         />
-      )}
 
-      <ChatHeader
-        otherUsername={otherUsername}
-        otherUserOnline={otherUserOnline}
-        otherUserTyping={otherUserTyping}
-      />
+        <div
+          ref={messagesContainerRef}
+          className={`flex-1 overflow-y-auto p-4 space-y-2 min-h-0 ${
+            showMessages ? "opacity-100" : "opacity-0"
+          } [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent`}
+          onScroll={handleScroll}
+        >
+          {isLoadingMore && (
+            <div className="flex justify-center py-3 sticky top-0 z-10">
+              <div className="w-6 h-6 border-3 border-green-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
 
-      <div
-        ref={messagesContainerRef}
-        className={`flex-1 overflow-y-auto p-4 space-y-2 min-h-0 ${
-          showMessages ? "opacity-100" : "opacity-0"
-        } [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent`}
-        onScroll={handleScroll}
-      >
-        {isLoadingMore && (
-          <div className="flex justify-center py-3 sticky top-0 z-10">
-            <div className="w-6 h-6 border-3 border-green-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
+          {isLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex justify-center py-10 text-gray-400">
+              پیامی وجود ندارد
+            </div>
+          ) : (
+            messages.map((msg) => (
+              <MessageBubble
+                key={msg._id}
+                message={msg}
+                isOwnMessage={msg.sender === currentUser}
+                currentUser={currentUser}
+                onReplyClick={handleReply}
+                onMessageClick={handleMessageClick}
+              />
+            ))
+          )}
+        </div>
 
-        {isLoading ? (
-          <div className="flex justify-center py-10">
-            <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex justify-center py-10 text-gray-400">
-            پیامی وجود ندارد
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <MessageBubble
-              key={msg._id}
-              message={msg}
-              isOwnMessage={msg.sender === currentUser}
-              currentUser={currentUser}
-              onReplyClick={handleReply}
-              onMessageClick={handleMessageClick}
-            />
-          ))
-        )}
+        <ReplyPreview
+          replyTo={replyTo}
+          currentUser={currentUser}
+          onCancel={cancelReply}
+        />
+
+        <ChatInput
+          onSendMessage={sendMessage}
+          onTyping={handleTyping}
+          replyTo={replyTo}
+        />
+
+        <style jsx global>{`
+          .highlight-message {
+            animation: highlight 2s ease-out;
+          }
+          @keyframes highlight {
+            0% {
+              background-color: rgba(34, 197, 94, 0.3);
+            }
+            100% {
+              background-color: transparent;
+            }
+          }
+        `}</style>
       </div>
-
-      <ReplyPreview
-        replyTo={replyTo}
-        currentUser={currentUser}
-        onCancel={cancelReply}
-      />
-
-      <ChatInput
-        onSendMessage={sendMessage}
-        onTyping={handleTyping}
-        replyTo={replyTo}
-      />
-
-      <style jsx global>{`
-        .highlight-message {
-          animation: highlight 2s ease-out;
-        }
-        @keyframes highlight {
-          0% {
-            background-color: rgba(34, 197, 94, 0.3);
-          }
-          100% {
-            background-color: transparent;
-          }
-        }
-      `}</style>
     </div>
   );
 }
