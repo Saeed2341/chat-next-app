@@ -9,13 +9,19 @@ interface ChatHeaderProps {
   otherUserOnline: boolean;
   otherUserLastSeen?: Date;
   otherUserTyping: boolean;
+  menu?: React.ReactNode;
+  onMenuToggle?: () => void;
+  isMenuOpen?: boolean;
 }
 
 export default function ChatHeader({ 
   otherUsername, 
   otherUserOnline, 
   otherUserLastSeen,
-  otherUserTyping 
+  otherUserTyping,
+  menu,
+  onMenuToggle,
+  isMenuOpen
 }: ChatHeaderProps) {
   return (
     <div className="sticky top-0 z-10 flex items-center justify-between p-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-4xl mx-2 mt-2 shadow-2xl shadow-black/40">
@@ -53,10 +59,16 @@ export default function ChatHeader({
         </div>
       </div>
       
-      {/* دکمه منو */}
-      <button className="p-2 hover:bg-white/10 rounded-full transition-all duration-200">
-        <FiMoreVertical size={20} className="text-gray-400" />
-      </button>
+      {/* دکمه سه نقطه با منو */}
+      <div className="relative">
+        <button
+          onClick={onMenuToggle}
+          className="p-2 hover:bg-white/10 rounded-full transition-all duration-200"
+        >
+          <FiMoreVertical size={20} className="text-gray-400" />
+        </button>
+        {isMenuOpen && menu}
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FiSearch, FiMoreVertical } from "react-icons/fi";
+import { FiSearch, FiMoreVertical, FiLogOut } from "react-icons/fi";
 import { connectSocket, restoreSocketSession } from "@/lib/socket";
 import { useAuth } from "@/hooks/useAuth";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -25,8 +25,17 @@ export default function ChatListPage() {
   const { username, isAuthenticated, loading: authLoading, logout } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const socketRef = useRef<any>(null);
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // ریدایرکت به لاگین (با useEffect)
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, authLoading, router]);
 
   const updateUsersList = useCallback((data: User[]) => {
     setUsers(prevUsers => {
@@ -46,6 +55,26 @@ export default function ChatListPage() {
     });
   }, [username]);
 
+  // بستن منو با کلیک بیرون
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
+  // تنظیم Socket
   useEffect(() => {
     if (!isAuthenticated || !username) return;
 
@@ -62,7 +91,7 @@ export default function ChatListPage() {
     const onUsersList = (data: User[]) => {
       if (!active) return;
       updateUsersList(data);
-      setIsLoading(false); // <--- بعد از دریافت لیست، بارگذاری تمام می‌شود
+      setIsLoading(false);
     };
 
     const onReceiveMessage = (msg: any) => {
@@ -171,12 +200,18 @@ export default function ChatListPage() {
     };
   }, [isAuthenticated, username, updateUsersList]);
 
+  const handleLogout = () => {
+    setIsMenuOpen(false);
+    logout();
+  };
+
+  // اگر در حال بارگذاری احراز هویت هستیم، اسپینر نشان بده
   if (authLoading) {
     return <LoadingSpinner />;
   }
 
+  // اگر احراز هویت نشده، چیزی نمایش نده (useEffect ریدایرکت می‌کند)
   if (!isAuthenticated) {
-    router.push("/login");
     return null;
   }
 
@@ -188,17 +223,35 @@ export default function ChatListPage() {
           Chat App
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 relative">
           <button className="p-2 rounded-full hover:bg-white/10 transition-colors duration-200 text-gray-300 hover:text-white">
             <FiSearch size={20} />
           </button>
-          <button className="p-2 rounded-full hover:bg-white/10 transition-colors duration-200 text-gray-300 hover:text-white">
+
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="p-2 rounded-full hover:bg-white/10 transition-colors duration-200 text-gray-300 hover:text-white relative"
+          >
             <FiMoreVertical size={20} />
           </button>
+
+          {isMenuOpen && (
+            <div
+              ref={menuRef}
+              className="absolute top-full left-0 mt-2 w-48 bg-[#202c33] backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-2 z-20"
+            >
+              <button
+                onClick={handleLogout}
+                className="w-full px-4 py-2.5 text-right hover:bg-white/10 transition-colors duration-200 flex items-center gap-3 text-red-400 hover:text-red-300"
+              >
+                <FiLogOut size={18} />
+                <span>خروج</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* محتوای اصلی */}
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <LoadingSpinner />

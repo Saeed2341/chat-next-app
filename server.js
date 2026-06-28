@@ -266,6 +266,28 @@ app.prepare().then(async () => {
       }
     });
 
+    // ================= CLEAR CHAT HISTORY =================
+    socket.on("clear_chat_history", async ({ user1, user2 }, cb) => {
+      try {
+        // حذف همه پیام‌های بین user1 و user2
+        await Message.deleteMany({
+          $or: [
+            { sender: user1, receiver: user2 },
+            { sender: user2, receiver: user1 },
+          ],
+        });
+
+        // به‌روزرسانی لیست کاربران برای هر دو کاربر
+        await emitUsersToAll(io);
+
+        // ارسال پاسخ موفقیت
+        if (cb) cb({ success: true });
+      } catch (error) {
+        console.error("❌ Clear chat history error:", error);
+        if (cb) cb({ success: false, error: error.message });
+      }
+    });
+
     // ================= EDIT MESSAGE =================
     socket.on(
       "edit_message",

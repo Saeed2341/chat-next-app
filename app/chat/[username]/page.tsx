@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
 } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { FiTrash2 } from "react-icons/fi";
 import { connectSocket, restoreSocketSession } from "@/lib/socket";
 import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
@@ -17,6 +18,7 @@ import MessageBubble from "@/components/chat/MessageBubble";
 import ChatInput from "@/components/chat/ChatInput";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import MessageMenu from "@/components/chat/MessageMenu";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 type MessageStatus = "sending" | "sent" | "delivered" | "seen";
 
@@ -39,6 +41,45 @@ interface Message {
 }
 
 export default function ChatPage() {
+  // ========== دیالوگ تایید ==========
+  const [dialogState, setDialogState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmText?: string;
+    cancelText?: string;
+    confirmButtonColor?: "red" | "green" | "blue" | "yellow";
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+    confirmText: "تایید",
+    cancelText: "انصراف",
+    confirmButtonColor: "red",
+  });
+
+  const showConfirmDialog = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    confirmText: string = "تایید",
+    cancelText: string = "انصراف",
+    confirmButtonColor: "red" | "green" | "blue" | "yellow" = "red"
+  ) => {
+    setDialogState({
+      isOpen: true,
+      title,
+      message,
+      onConfirm,
+      confirmText,
+      cancelText,
+      confirmButtonColor,
+    });
+  };
+
+  // ========== بقیه state‌ها ==========
   const router = useRouter();
   const params = useParams();
   const otherUsername = params.username as string;
@@ -63,6 +104,8 @@ export default function ChatPage() {
   const [isSocketReady, setIsSocketReady] = useState(false);
   const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const socketRef = useRef<any>(null);
   const isMountedRef = useRef(true);
@@ -73,6 +116,25 @@ export default function ChatPage() {
   const initialScrollDoneRef = useRef(false);
   const pageRef = useRef(0);
   const hasMoreRef = useRef(true);
+
+  // ========== useEffectها ==========
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   const scrollToBottom = useCallback(() => {
     const container = messagesContainerRef.current;
@@ -121,7 +183,12 @@ export default function ChatPage() {
 
   const loadMessages = useCallback(
     (pageNum: number, isLoadMore = false) => {
-      if (!isSocketReady || !socketRef.current || !currentUser || !otherUsername) {
+      if (
+        !isSocketReady ||
+        !socketRef.current ||
+        !currentUser ||
+        !otherUsername
+      ) {
         return;
       }
 
@@ -280,15 +347,25 @@ export default function ChatPage() {
     toast.success("پیام ویرایش شد");
   };
 
+  // ========== حذف پیام با دیالوگ ==========
   const handleDeleteMessage = (messageId: string) => {
-    if (!socketRef.current) return;
-    setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
-    socketRef.current.emit("delete_message", {
-      messageId,
-      sender: currentUser,
-      receiver: otherUsername,
-    });
-    toast.success("پیام حذف شد");
+    showConfirmDialog(
+      "حذف پیام",
+      "آیا از حذف این پیام اطمینان دارید؟",
+      () => {
+        if (!socketRef.current) return;
+        setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+        socketRef.current.emit("delete_message", {
+          messageId,
+          sender: currentUser,
+          receiver: otherUsername,
+        });
+        toast.success("پیام حذف شد");
+      },
+      "حذف",
+      "انصراف",
+      "red"
+    );
   };
 
   const handlePinMessage = (messageId: string) => {
@@ -337,6 +414,35 @@ export default function ChatPage() {
     if (y < 10) y = 10;
 
     setMenuVisible({ message: msg, x, y });
+  };
+
+  // ========== پاک کردن تاریخچه با دیالوگ ==========
+  const handleClearHistory = () => {
+    if (!socketRef.current || !currentUser || !otherUsername) return;
+
+    setIsMenuOpen(false);
+
+    showConfirmDialog(
+      "پاک کردن تاریخچه",
+      "آیا از پاک کردن تمام پیام‌های این چت اطمینان دارید؟ این عمل غیرقابل بازگشت است.",
+      () => {
+        socketRef.current.emit(
+          "clear_chat_history",
+          { user1: currentUser, user2: otherUsername },
+          (response: { success?: boolean }) => {
+            if (response?.success) {
+              setMessages([]);
+              toast.success("تاریخچه پیام‌ها پاک شد");
+            } else {
+              toast.error("خطا در پاک کردن تاریخچه");
+            }
+          }
+        );
+      },
+      "پاک کردن",
+      "انصراف",
+      "red"
+    );
   };
 
   const sendMessage = (text: string) => {
@@ -578,19 +684,31 @@ export default function ChatPage() {
   return (
     <div className="chat-screen h-[100dvh] text-white flex flex-col overflow-hidden relative">
       {/* عکس پس‌زمینه */}
-      <div 
+      <div
         className="absolute inset-0 z-0"
         style={{
           backgroundImage: `url('/images/chat-bg.png')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
         }}
       />
-      
+
       {/* لایه تاریک ملایم */}
       <div className="absolute inset-0 z-0 bg-black/50" />
 
       <div className="relative z-10 flex flex-col h-full">
+        {/* دیالوگ تایید */}
+        <ConfirmDialog
+          isOpen={dialogState.isOpen}
+          onClose={() => setDialogState((prev) => ({ ...prev, isOpen: false }))}
+          onConfirm={dialogState.onConfirm}
+          title={dialogState.title}
+          message={dialogState.message}
+          confirmText={dialogState.confirmText}
+          cancelText={dialogState.cancelText}
+          confirmButtonColor={dialogState.confirmButtonColor}
+        />
+
         {menuVisible && (
           <MessageMenu
             message={menuVisible.message}
@@ -609,6 +727,24 @@ export default function ChatPage() {
           otherUsername={otherUsername}
           otherUserOnline={otherUserOnline}
           otherUserTyping={otherUserTyping}
+          menu={
+            isMenuOpen && (
+              <div
+                ref={menuRef}
+                className="absolute top-full left-0 mt-2 w-48 bg-[#202c33] backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-2 z-20"
+              >
+                <button
+                  onClick={handleClearHistory}
+                  className="w-full px-4 py-2.5 text-right hover:bg-white/10 transition-colors duration-200 flex items-center gap-3 text-red-400 hover:text-red-300"
+                >
+                  <FiTrash2 size={18} />
+                  <span>پاک کردن تاریخچه</span>
+                </button>
+              </div>
+            )
+          }
+          onMenuToggle={() => setIsMenuOpen(!isMenuOpen)}
+          isMenuOpen={isMenuOpen}
         />
 
         <div
