@@ -263,6 +263,7 @@ app.prepare().then(async () => {
         if (cb) {
           cb({ success: false, error: error.message });
         }
+        
       }
     });
 
