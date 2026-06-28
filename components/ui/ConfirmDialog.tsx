@@ -12,7 +12,7 @@ interface ConfirmDialogProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
-  confirmButtonColor?: "red" | "green" | "blue";
+  confirmButtonColor?: "red" | "green" | "blue" | "yellow";
 }
 
 export default function ConfirmDialog({

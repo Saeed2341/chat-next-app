@@ -49,7 +49,7 @@ export default function ChatPage() {
     onConfirm: () => void;
     confirmText?: string;
     cancelText?: string;
-    confirmButtonColor?: "red" | "green" | "blue" | "yellow";
+    confirmButtonColor?: "red" | "green" | "blue" | "yellow"; // ← رنگ زرد هم اضافه شد
   }>({
     isOpen: false,
     title: "",
@@ -66,7 +66,7 @@ export default function ChatPage() {
     onConfirm: () => void,
     confirmText: string = "تایید",
     cancelText: string = "انصراف",
-    confirmButtonColor: "red" | "green" | "blue" | "yellow" = "red"
+    confirmButtonColor: "red" | "green" | "blue" | "yellow" = "red",
   ) => {
     setDialogState({
       isOpen: true,
@@ -364,7 +364,7 @@ export default function ChatPage() {
       },
       "حذف",
       "انصراف",
-      "red"
+      "red",
     );
   };
 
@@ -436,12 +436,12 @@ export default function ChatPage() {
             } else {
               toast.error("خطا در پاک کردن تاریخچه");
             }
-          }
+          },
         );
       },
       "پاک کردن",
       "انصراف",
-      "red"
+      "red",
     );
   };
 
