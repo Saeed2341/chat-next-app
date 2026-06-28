@@ -1,10 +1,9 @@
 const { createServer } = require("http");
-const { parse } = require("url"); // ← این خط رو اضافه کن
 const next = require("next");
 const { Server } = require("socket.io");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser");
+const cookieParser = require("cookie-parser"); // اضافه شود
 
 const { connectDB } = require("./lib/db");
 const User = require("./models/User");
@@ -13,13 +12,13 @@ const Message = require("./models/Message");
 const SECRET = "secret123";
 const dev = process.env.NODE_ENV !== "production";
 
-// Next.js 16 defaults to Turbopack in dev which panics on non-ASCII paths
+// Next.js 16 defaults to Turbopack in dev which panics on non-ASCII paths (e.g. Persian Desktop)
 if (dev && !process.argv.includes("--webpack")) {
   process.argv.push("--webpack");
 }
 
 const app = next({ dev });
-const handle = app.getRequestHandler();
+const handler = app.getRequestHandler();
 
 const onlineUsers = new Map();
 const socketUsers = new Map();
@@ -34,28 +33,24 @@ app.prepare().then(async () => {
   }
 
   const server = createServer((req, res) => {
-    // ✅ این خط حیاتی است - درخواست رو با parsedUrl به Next.js بفرست
-    const parsedUrl = parse(req.url, true);
-    
+    // اضافه کردن cookie-parser به درخواست‌ها
     cookieParser()(req, res, (err) => {
       if (err) {
         console.error("Cookie parser error:", err);
       }
-      // ✅ درست: با parsedUrl صدا زده شده
-      handle(req, res, parsedUrl);
+      handler(req, res);
     });
   });
 
   const io = new Server(server, {
     cors: {
-      origin: "*",
+      origin: "*", // اجازه دسترسی از همه آدرس‌ها
       methods: ["GET", "POST"],
       credentials: true,
     },
-    transports: ["websocket", "polling"],
+    transports: ["websocket", "polling"], // اضافه شود
   });
 
-  // ============= تمام کدهای WebSocket شما =============
   io.on("connection", (socket) => {
     console.log("🔌 New client connected:", socket.id);
 
@@ -122,6 +117,7 @@ app.prepare().then(async () => {
         );
         await emitUsersToAll(io);
 
+        // برگرداندن توکن در پاسخ
         cb({ token, username });
       } catch (error) {
         console.error("❌ Login error:", error);
@@ -129,7 +125,7 @@ app.prepare().then(async () => {
       }
     });
 
-    // ================= SESSION RESTORE =================
+    // ================= SESSION RESTORE (after refresh/reconnect) =================
     socket.on("session_restore", async ({ token }, cb) => {
       try {
         if (!token) {
@@ -368,22 +364,25 @@ app.prepare().then(async () => {
     });
 
     // ================= LOAD MESSAGES =================
+    // ================= LOAD MESSAGES =================
     socket.on(
       "load_messages",
       async ({ user1, user2, page = 0, limit = 20 }, cb) => {
         try {
           const skip = page * limit;
 
+          // دریافت پیام‌ها با مرتب‌سازی نزولی (جدیدترین اول)
           const messages = await Message.find({
             $or: [
               { sender: user1, receiver: user2 },
               { sender: user2, receiver: user1 },
             ],
           })
-            .sort({ createdAt: -1 })
+            .sort({ createdAt: -1 }) // جدیدترین اول
             .skip(skip)
             .limit(limit);
 
+          // معکوس کردن برای نمایش از قدیم به جدید در کلاینت
           const reversedMessages = [...messages].reverse();
 
           const formattedMessages = reversedMessages.map((msg) => ({
@@ -520,6 +519,5 @@ app.prepare().then(async () => {
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`✅ Ready on http://localhost:${PORT}`);
   });
 });

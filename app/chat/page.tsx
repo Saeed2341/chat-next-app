@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { FiLogOut, FiUsers } from "react-icons/fi";
+import { FiLogOut, FiUsers, FiSearch, FiMoreVertical } from "react-icons/fi";
 import { connectSocket, restoreSocketSession } from "@/lib/socket";
 import { useAuth } from "@/hooks/useAuth";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -15,7 +15,7 @@ interface User {
   lastMessage?: string;
   lastMessageStatus?: "sending" | "sent" | "delivered" | "seen";
   lastMessageSender?: string;
-  lastMessageId?: string; // اضافه شد
+  lastMessageId?: string;
   unread: number;
   isTyping?: boolean;
 }
@@ -172,22 +172,23 @@ export default function ChatListPage() {
   }
 
   return (
-    <div className="h-[100dvh] bg-[#0b141a] text-white flex flex-col overflow-hidden">
-      <div className="p-4 bg-[#111b21] border-b border-gray-800 flex justify-between items-center">
-        <button
-          onClick={logout}
-          className="flex items-center gap-2 bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white px-3 py-2 rounded-lg transition-all duration-200"
-        >
-          <FiLogOut size={20} />
-          <span className="text-sm">خروج</span>
-        </button>
-        
-        <div className="flex items-center gap-2">
-          <FiUsers size={20} className="text-green-500" />
-          <span className="font-bold">لیست کاربران</span>
+    <div className="h-[100dvh] bg-gradient-to-br from-[#0a0a0a] via-[#14141e] to-[#1a1a2e] text-white flex flex-col overflow-hidden">
+      {/* هدر شیشه‌ای با ارتفاع بیشتر */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 bg-white/5 backdrop-blur-xl border-b border-white/5 shadow-lg shadow-black/20">
+        {/* سمت چپ: نام برنامه */}
+        <div className="text-xl font-bold text-white/90 tracking-wide">
+          Chat App
         </div>
-        
-        <div className="w-20" />
+
+        {/* سمت راست: دو آیکون */}
+        <div className="flex items-center gap-3">
+          <button className="p-2 rounded-full hover:bg-white/10 transition-colors duration-200 text-gray-300 hover:text-white">
+            <FiSearch size={20} />
+          </button>
+          <button className="p-2 rounded-full hover:bg-white/10 transition-colors duration-200 text-gray-300 hover:text-white">
+            <FiMoreVertical size={20} />
+          </button>
+        </div>
       </div>
 
       <UsersList users={users} currentUser={username} />

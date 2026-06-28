@@ -18,39 +18,43 @@ export default function ChatHeader({
   otherUserTyping 
 }: ChatHeaderProps) {
   return (
-    <div className="flex items-center justify-between p-3 bg-[#111b21] border-b border-gray-800 sticky top-0 z-10">
-      <Link
-        href="/chat"
-        className="p-2 hover:bg-[#202c33] rounded-full transition-all duration-200 group"
-      >
-        <FiArrowRight size={22} className="group-hover:text-green-500 transition" />
-      </Link>
-      
+    <div className="sticky top-0 z-10 flex items-center justify-between p-3 bg-white/5 backdrop-blur-xl border border-white/10 rounded-4xl mx-2 mt-2 shadow-2xl shadow-black/40">
+      {/* بخش چپ: دکمه برگشت + آواتار */}
       <div className="flex items-center gap-3">
+        <Link
+          href="/chat"
+          className="p-2 hover:bg-white/10 rounded-full transition-all duration-200 group"
+        >
+          <FiArrowRight size={22} className="text-gray-300 group-hover:text-green-400 transition" />
+        </Link>
+        
         <Avatar 
           username={otherUsername} 
-          size="sm" 
+          size="md"
           online={otherUserOnline}
           lastSeen={otherUserLastSeen}
-          showStatus={true}
+          showStatus={false}
         />
-        <div>
-          <div className="font-bold text-lg">{otherUsername}</div>
-          <div className="text-xs">
-            {otherUserTyping ? (
-              <div className="flex items-center gap-1 text-green-400">
-                <span>در حال نوشتن...</span>
-              </div>
-            ) : (
-              <span className="text-gray-400">
-                {otherUserOnline ? "آنلاین" : "آفلاین"}
-              </span>
-            )}
-          </div>
+      </div>
+      
+      {/* بخش وسط: نام کاربر + وضعیت */}
+      <div className="flex-1 text-right mr-3">
+        <div className="font-bold text-lg text-white drop-shadow-lg">{otherUsername}</div>
+        <div className="text-xs">
+          {otherUserTyping ? (
+            <div className="flex items-center gap-1 text-green-300 justify-end">
+              <span>در حال نوشتن...</span>
+            </div>
+          ) : (
+            <span className="text-gray-400">
+              {otherUserOnline ? "آنلاین" : "آخرین بازدید به تازگی"}
+            </span>
+          )}
         </div>
       </div>
       
-      <button className="p-2 hover:bg-[#202c33] rounded-full transition-all duration-200">
+      {/* دکمه منو */}
+      <button className="p-2 hover:bg-white/10 rounded-full transition-all duration-200">
         <FiMoreVertical size={20} className="text-gray-400" />
       </button>
     </div>

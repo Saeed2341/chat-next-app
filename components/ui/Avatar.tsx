@@ -20,19 +20,26 @@ export default function Avatar({
     return name.charAt(0).toUpperCase();
   };
 
-  const getColor = (name: string) => {
-    const colors = [
-      "bg-red-500", "bg-blue-500", "bg-green-500", "bg-yellow-500",
-      "bg-purple-500", "bg-pink-500", "bg-indigo-500", "bg-teal-500",
-      "bg-orange-500", "bg-cyan-500", "bg-amber-500", "bg-lime-500"
+  const getGradient = (name: string) => {
+    const gradients = [
+      "from-purple-500 to-pink-500",
+      "from-blue-500 to-cyan-500",
+      "from-green-500 to-emerald-500",
+      "from-yellow-500 to-orange-500",
+      "from-red-500 to-rose-500",
+      "from-indigo-500 to-blue-500",
+      "from-teal-500 to-green-500",
+      "from-pink-500 to-rose-500",
+      "from-amber-500 to-yellow-500",
+      "from-violet-500 to-purple-500",
     ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
+    const index = name.charCodeAt(0) % gradients.length;
+    return gradients[index];
   };
 
   const getLastSeenText = () => {
     if (!lastSeen) return "";
-    if (online) return null; // اگر آنلاین است، متن آخرین بازدید نمایش داده نشود
+    if (online) return null;
     
     const now = new Date();
     const last = new Date(lastSeen);
@@ -68,17 +75,34 @@ export default function Avatar({
   const lastSeenText = getLastSeenText();
 
   return (
-    <div className="relative">
-      <div className={`${sizeClasses[size]} ${getColor(username)} rounded-full flex items-center justify-center font-bold text-white shadow-lg`}>
+    <div className="relative group">
+      {/* آواتار با گرادیان و حلقه‌های تزئینی */}
+      <div className={`
+        ${sizeClasses[size]} 
+        bg-gradient-to-br ${getGradient(username)} 
+        rounded-full flex items-center justify-center 
+        font-bold text-white 
+        shadow-lg shadow-black/30 
+        ring-2 ring-white/20 ring-offset-2 ring-offset-black/50 
+        transition-all duration-300 
+        group-hover:scale-105 group-hover:shadow-xl group-hover:ring-white/40
+      `}>
         {getInitials(username)}
       </div>
       
-      {/* فقط دایره آنلاین - بدون متن اضافی */}
+      {/* دایره آنلاین با انیمیشن چشمک‌زن */}
       {showStatus && online && (
-        <div className={`absolute bottom-0 right-0 ${statusSize[size]} bg-green-500 rounded-full border-2 border-[#111b21] ring-2 ring-green-400/50`} />
+        <div className={`
+          absolute bottom-0 right-0 
+          ${statusSize[size]} 
+          bg-green-500 rounded-full 
+          border-2 border-[#111b21] 
+          ring-2 ring-green-400/50 
+          animate-pulse
+        `} />
       )}
       
-      {/* متن آخرین بازدید - فقط در صورتی که آنلاین نباشد */}
+      {/* متن آخرین بازدید (در صورت عدم آنلاین بودن) */}
       {showStatus && !online && lastSeenText && (
         <div className="absolute -bottom-6 right-0 text-[10px] text-gray-400 whitespace-nowrap">
           {lastSeenText}

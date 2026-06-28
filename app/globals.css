@@ -50,7 +50,7 @@ body {
   }
 
   html {
-    scroll-behavior: auto;
+    scroll-behavior: smooth;
     height: 100%;
   }
 
@@ -108,11 +108,26 @@ body {
     }
   }
 
-  .animate-fade-in {
+  /* .animate-fade-in {
     animation: fade-in 0.3s ease-out;
   }
 
   .animate-pulse-slow {
     animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  } */
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px); /* پیام از ۲۰ پیکسل پایین‌تر شروع می‌شود */
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: slideUp 0.3s ease-out;
 }

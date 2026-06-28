@@ -3,6 +3,7 @@
 import { BsCheck, BsCheckAll } from "react-icons/bs";
 import { HiOutlineClock } from "react-icons/hi";
 import { FiMapPin } from "react-icons/fi";
+import { useRef, useEffect } from "react";
 
 interface Message {
   _id?: string;
@@ -29,14 +30,19 @@ interface MessageBubbleProps {
   onMessageClick: (message: Message, event: React.MouseEvent) => void;
 }
 
-export default function MessageBubble({ 
-  message, 
-  isOwnMessage, 
-  currentUser, 
-  onReplyClick, 
-  onMessageClick 
+export default function MessageBubble({
+  message,
+  isOwnMessage,
+  currentUser,
+  onReplyClick,
+  onMessageClick,
 }: MessageBubbleProps) {
-  
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
+
   const formatTime = (date: any) => {
     if (!date) return "";
     const d = new Date(date);
@@ -71,14 +77,16 @@ export default function MessageBubble({
   return (
     <div
       id={`message-${message._id}`}
-      className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} animate-fade-in group`}
+      className={`flex ${isOwnMessage ? "justify-start" : "justify-end"} ${
+        isFirstRender.current ? "animate-fade-in" : ""
+      } group`}
       onClick={(e) => onMessageClick(message, e)}
     >
       <div
-        className={`relative px-4 py-2 max-w-[75%] break-words cursor-pointer transition hover:brightness-95 ${
+        className={`relative px-4 py-2 max-w-[75%] break-words cursor-pointer transition hover:brightness-110 shadow-lg ${
           isOwnMessage
-            ? "bg-[#005c4b] rounded-tl-2xl rounded-tr-2xl rounded-br-2xl"
-            : "bg-[#202c33] rounded-tr-2xl rounded-bl-2xl rounded-tl-2xl"
+            ? "bg-green-500/20 backdrop-blur-sm border border-green-500/20 shadow-green-500/10 rounded-3xl rounded-br-none"
+            : "bg-white/10 backdrop-blur-sm border border-white/10 shadow-black/20 rounded-3xl rounded-bl-none"
         } ${message.isPinned ? "ring-2 ring-yellow-500/50" : ""}`}
       >
         {message.isPinned && (
@@ -86,13 +94,13 @@ export default function MessageBubble({
             <FiMapPin size={12} className="text-yellow-500 rotate-45" />
           </div>
         )}
-        
+
         {/* بخش پاسخ به پیام */}
         {message.replyTo && message.replyTo.messageId && (
-          <div 
+          <div
             className={`mb-1 pb-1 pr-2 cursor-pointer hover:opacity-80 transition ${
-              isOwnMessage 
-                ? "border-r-2 border-r-green-400" 
+              isOwnMessage
+                ? "border-r-2 border-r-green-400"
                 : "border-r-2 border-r-green-600"
             }`}
             onClick={(e) => {
@@ -101,30 +109,39 @@ export default function MessageBubble({
             }}
           >
             <div className="text-xs text-green-400 font-bold">
-              {message.replyTo.sender === currentUser ? "پاسخ به خودتان" : `پاسخ به ${message.replyTo.sender}`}
+              {message.replyTo.sender === currentUser
+                ? "پاسخ به خودتان"
+                : `پاسخ به ${message.replyTo.sender}`}
             </div>
             <div className="text-xs text-gray-400 truncate max-w-[200px]">
               {message.replyTo.text}
             </div>
           </div>
         )}
-        
-        <div className="text-right text-sm pr-2">{message.text}</div>
-        
-        {message.editedAt && (
-          <div className="text-xs text-gray-400 text-left mt-0.5">(ویرایش شده)</div>
-        )}
-        
-        <div className="flex items-center justify-end gap-1 mt-1">
-          <span className="text-xs text-gray-300">
-            {formatTime(message.time || message.createdAt)}
+
+        {/* کانتینر اصلی: متن + زمان با flex-wrap */}
+        <div className="flex flex-row-reverse flex-wrap items-baseline justify-end gap-x-1 gap-y-0">
+          {/* متن پیام */}
+          <span className="text-[15px] text-white/90 break-words whitespace-pre-wrap text-right">
+            {message.text}
           </span>
-          {isOwnMessage && (
-            <span className="inline-flex">
-              {getMessageStatusIcon(message.status, message.seen)}
-            </span>
-          )}
+
+          {/* زمان و وضعیت */}
+          <span className="flex items-center gap-0.5 text-[10px] text-gray-400 leading-none shrink-0">
+            <span>{formatTime(message.time || message.createdAt)}</span>
+            {isOwnMessage && (
+              <span className="inline-flex">
+                {getMessageStatusIcon(message.status, message.seen)}
+              </span>
+            )}
+          </span>
         </div>
+
+        {message.editedAt && (
+          <div className="text-[10px] text-gray-400 text-left mt-0.5">
+            (ویرایش شده)
+          </div>
+        )}
       </div>
     </div>
   );
