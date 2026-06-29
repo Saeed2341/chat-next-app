@@ -19,8 +19,10 @@ export default function PushNotificationButton({ className = '' }: PushNotificat
     unsubscribe
   } = usePushNotification(username || undefined);
 
+  // اگر پشتیبانی نمی‌شود
   if (!isSupported) return null;
 
+  // اگر مجوز رد شده
   if (permission === 'denied') {
     return (
       <button
@@ -33,6 +35,7 @@ export default function PushNotificationButton({ className = '' }: PushNotificat
     );
   }
 
+  // حالت بارگذاری
   if (isLoading) {
     return (
       <button
@@ -45,6 +48,7 @@ export default function PushNotificationButton({ className = '' }: PushNotificat
     );
   }
 
+  // دکمه اصلی
   return (
     <button
       onClick={isSubscribed ? unsubscribe : subscribe}
@@ -57,7 +61,7 @@ export default function PushNotificationButton({ className = '' }: PushNotificat
       {isSubscribed ? (
         <>
           <FiBell size={18} className="text-green-400" />
-          <span>اعلان‌ها فعال است ✅</span>
+          <span>اعلان‌ها فعال است</span>
         </>
       ) : (
         <>

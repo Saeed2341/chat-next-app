@@ -26,12 +26,12 @@ export function usePushNotification(userId?: string) {
 
   const checkSubscriptionStatus = useCallback(async () => {
     try {
-      // ابتدا سرویس‌ورکر اصلی را بررسی کن
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       setIsSubscribed(!!subscription);
     } catch (error) {
       console.error('Error checking subscription:', error);
+      setIsSubscribed(false);
     }
   }, []);
 
@@ -46,14 +46,32 @@ export function usePushNotification(userId?: string) {
       return false;
     }
 
+    if (isLoading) return false;
+
     setIsLoading(true);
 
     try {
-      // 1. ثبت سرویس‌ورکر اصلی
-      const registration = await navigator.serviceWorker.ready;
+      console.log('🔍 1. بررسی سرویس‌ورکر...');
+      
+      // ثبت سرویس‌ورکر
+      let registration = await navigator.serviceWorker.getRegistration('/');
+      if (!registration) {
+        console.log('📝 ثبت سرویس‌ورکر...');
+        registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        await new Promise(resolve => {
+          if (registration.active) {
+            resolve(true);
+          } else {
+            registration.addEventListener('activate', () => resolve(true));
+          }
+        });
+      }
+      
+      registration = await navigator.serviceWorker.ready;
       console.log('✅ سرویس‌ورکر آماده است');
 
-      // 2. درخواست مجوز
+      // درخواست مجوز
+      console.log('🔍 2. درخواست مجوز...');
       const permissionResult = await Notification.requestPermission();
       setPermission(permissionResult);
 
@@ -61,21 +79,26 @@ export function usePushNotification(userId?: string) {
         toast.error('برای دریافت نوتیفیکیشن باید اجازه دهید');
         return false;
       }
+      console.log('✅ مجوز گرفته شد');
 
-      // 3. دریافت کلید VAPID
+      // دریافت کلید VAPID
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!publicKey) {
         toast.error('کلید عمومی نوتیفیکیشن تنظیم نشده است');
         return false;
       }
+      console.log('✅ کلید VAPID موجود است');
 
-      // 4. ساخت اشتراک
+      // ساخت اشتراک
+      console.log('🔍 3. ساخت اشتراک...');
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: publicKey
       });
+      console.log('✅ اشتراک ساخته شد');
 
-      // 5. ارسال به سرور
+      // ارسال به سرور
+      console.log('🔍 4. ارسال به سرور...');
       const response = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -85,22 +108,23 @@ export function usePushNotification(userId?: string) {
         } as PushSubscriptionData)
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         setIsSubscribed(true);
         toast.success('نوتیفیکیشن با موفقیت فعال شد ✅');
         return true;
       } else {
-        const error = await response.json();
-        throw new Error(error.message || 'خطا در فعال‌سازی نوتیفیکیشن');
+        throw new Error(data.error || 'خطا در فعال‌سازی نوتیفیکیشن');
       }
     } catch (error) {
-      console.error('Error subscribing to push:', error);
+      console.error('❌ Error:', error);
       toast.error('خطا: ' + (error instanceof Error ? error.message : 'مشخص نیست'));
       return false;
     } finally {
       setIsLoading(false);
     }
-  }, [isSupported, userId]);
+  }, [isSupported, userId, isLoading]);
 
   const unsubscribe = useCallback(async () => {
     try {
