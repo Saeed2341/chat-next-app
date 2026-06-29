@@ -295,45 +295,45 @@ app.prepare().then(async () => {
           }
 
           // ===== ارسال نوتیفیکیشن =====
-          if (!onlineUsers.has(receiver)) {
-            try {
-              console.log(`🔍 Looking for subscription in DB for: ${receiver}`);
+          // if (!onlineUsers.has(receiver)) {
+          try {
+            console.log(`🔍 Looking for subscription in DB for: ${receiver}`);
 
-              // دریافت اشتراک از دیتابیس
-              const user = await User.findOne({ username: receiver });
-              const subscription = user?.pushSubscription;
+            // دریافت اشتراک از دیتابیس
+            const user = await User.findOne({ username: receiver });
+            const subscription = user?.pushSubscription;
 
-              console.log(
-                `📋 Subscription in DB: ${subscription ? "✅ YES" : "❌ NO"}`,
+            console.log(
+              `📋 Subscription in DB: ${subscription ? "✅ YES" : "❌ NO"}`,
+            );
+
+            if (subscription && publicKey && privateKey) {
+              const pushPayload = JSON.stringify({
+                title: `📩 پیام از ${sender}`,
+                body: text || "یک عکس جدید",
+                icon: "/icons/icon-192x192.png",
+                url: `/chat/${sender}`,
+                messageId: msg._id.toString(),
+                sender: sender,
+              });
+
+              await webPush.sendNotification(subscription, pushPayload);
+              console.log(`✅ Push notification sent to ${receiver}`);
+            } else {
+              console.log(`ℹ️ No push subscription for ${receiver}`);
+            }
+          } catch (pushError) {
+            console.error(`❌ Push error for ${receiver}:`, pushError);
+
+            if (pushError.statusCode === 410) {
+              await User.updateOne(
+                { username: receiver },
+                { pushSubscription: null },
               );
-
-              if (subscription && publicKey && privateKey) {
-                const pushPayload = JSON.stringify({
-                  title: `📩 پیام از ${sender}`,
-                  body: text || "یک عکس جدید",
-                  icon: "/icons/icon-192x192.png",
-                  url: `/chat/${sender}`,
-                  messageId: msg._id.toString(),
-                  sender: sender,
-                });
-
-                await webPush.sendNotification(subscription, pushPayload);
-                console.log(`✅ Push notification sent to ${receiver}`);
-              } else {
-                console.log(`ℹ️ No push subscription for ${receiver}`);
-              }
-            } catch (pushError) {
-              console.error(`❌ Push error for ${receiver}:`, pushError);
-
-              if (pushError.statusCode === 410) {
-                await User.updateOne(
-                  { username: receiver },
-                  { pushSubscription: null },
-                );
-                console.log(`🗑️ Removed expired subscription for ${receiver}`);
-              }
+              console.log(`🗑️ Removed expired subscription for ${receiver}`);
             }
           }
+          // }
 
           if (cb) {
             cb({ success: true, messageId: msg._id.toString() });
