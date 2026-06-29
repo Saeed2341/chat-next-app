@@ -59,7 +59,7 @@ export default function PushNotificationButton({
       {isSubscribed ? (
         <>
           <FiBell size={18} className="text-green-400" />
-          <span>اعلان‌ها فعال است ✅</span>
+          <span>اعلان‌ها فعال است</span>
         </>
       ) : (
         <>
