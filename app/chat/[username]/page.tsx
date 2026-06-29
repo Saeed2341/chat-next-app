@@ -19,26 +19,9 @@ import ChatInput from "@/components/chat/ChatInput";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import MessageMenu from "@/components/chat/MessageMenu";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-
-type MessageStatus = "sending" | "sent" | "delivered" | "seen";
-
-interface Message {
-  _id?: string;
-  sender: string;
-  receiver: string;
-  text: string;
-  time?: Date;
-  createdAt?: Date;
-  status?: MessageStatus;
-  seen?: boolean;
-  isPinned?: boolean;
-  editedAt?: Date;
-  replyTo?: {
-    messageId: string;
-    text: string;
-    sender: string;
-  };
-}
+import { useChatStore } from "@/store/chatStore";
+import { useVisualViewport } from "@/hooks/useVisualViewport";
+import type { Message } from "@/types";
 
 export default function ChatPage() {
   // ========== دیالوگ تایید ==========
@@ -83,6 +66,7 @@ export default function ChatPage() {
   const router = useRouter();
   const params = useParams();
   const otherUsername = params.username as string;
+  const chatId = otherUsername;
 
   const {
     username: currentUser,
@@ -90,7 +74,22 @@ export default function ChatPage() {
     loading: authLoading,
   } = useAuth();
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessagesLocal] = useState<Message[]>(() =>
+    useChatStore.getState().getMessages(chatId),
+  );
+  const setMessages = useCallback(
+    (value: Message[] | ((prev: Message[]) => Message[])) => {
+      const next =
+        typeof value === "function"
+          ? value(useChatStore.getState().getMessages(chatId))
+          : value;
+      useChatStore.getState().setChatMessages(chatId, next);
+      setMessagesLocal(next);
+    },
+    [chatId],
+  );
+
+  useVisualViewport();
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [otherUserOnline, setOtherUserOnline] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
@@ -99,11 +98,17 @@ export default function ChatPage() {
     x: number;
     y: number;
   } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(
+    () => useChatStore.getState().getMessages(chatId).length === 0,
+  );
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isSocketReady, setIsSocketReady] = useState(false);
-  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
-  const [showMessages, setShowMessages] = useState(false);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(
+    () => useChatStore.getState().getMessages(chatId).length > 0,
+  );
+  const [showMessages, setShowMessages] = useState(
+    () => useChatStore.getState().getMessages(chatId).length > 0,
+  );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -116,6 +121,7 @@ export default function ChatPage() {
   const initialScrollDoneRef = useRef(false);
   const pageRef = useRef(0);
   const hasMoreRef = useRef(true);
+  const fetchedForChatRef = useRef<string | null>(null);
 
   // ========== useEffectها ==========
   useEffect(() => {
@@ -182,7 +188,7 @@ export default function ChatPage() {
   );
 
   const loadMessages = useCallback(
-    (pageNum: number, isLoadMore = false) => {
+    (pageNum: number, isLoadMore = false, silent = false) => {
       if (
         !isSocketReady ||
         !socketRef.current ||
@@ -201,7 +207,7 @@ export default function ChatPage() {
           previousScrollHeightRef.current =
             messagesContainerRef.current.scrollHeight;
         }
-      } else {
+      } else if (!silent) {
         setIsLoading(true);
         setShowMessages(false);
         initialScrollDoneRef.current = false;
@@ -219,11 +225,8 @@ export default function ChatPage() {
           if (!isMountedRef.current) return;
 
           if (isLoadMore) {
-            setMessages((prev) => {
-              const existingIds = new Set(prev.map((m) => m._id));
-              const newMessages = msgs.filter((m) => !existingIds.has(m._id));
-              return [...newMessages, ...prev];
-            });
+            useChatStore.getState().prependChatMessages(chatId, msgs);
+            setMessagesLocal(useChatStore.getState().getMessages(chatId));
 
             requestAnimationFrame(() => {
               if (
@@ -238,35 +241,80 @@ export default function ChatPage() {
             });
 
             hasMoreRef.current = msgs.length === 20;
+            useChatStore.getState().setMessagesMeta(chatId, {
+              page: pageNum,
+              hasMore: msgs.length === 20,
+            });
             setIsLoadingMore(false);
             isLoadingMoreRef.current = false;
           } else {
-            setMessages(msgs);
+            if (silent) {
+              setMessages((prev) => {
+                const serverMap = new Map(
+                  msgs.filter((m) => m._id).map((m) => [m._id!, m]),
+                );
+                const existingIds = new Set(prev.map((m) => m._id));
+                const updated = prev.map((m) => {
+                  if (m._id && serverMap.has(m._id)) {
+                    return { ...m, ...serverMap.get(m._id)! };
+                  }
+                  return m;
+                });
+                const newMsgs = msgs.filter(
+                  (m) => m._id && !existingIds.has(m._id),
+                );
+                return [...updated, ...newMsgs];
+              });
+            } else {
+              setMessages(msgs);
+            }
             hasMoreRef.current = msgs.length === 20;
-            setIsLoading(false);
+            useChatStore.getState().setMessagesMeta(chatId, {
+              page: pageNum,
+              hasMore: msgs.length === 20,
+              isInitialLoadDone: true,
+            });
+            if (!silent) {
+              setIsLoading(false);
+            }
             setIsInitialLoadDone(true);
-            markMessagesAsSeen(msgs);
+            markMessagesAsSeen(silent ? useChatStore.getState().getMessages(chatId) : msgs);
           }
 
           pageRef.current = pageNum;
         },
       );
     },
-    [currentUser, otherUsername, isSocketReady, markMessagesAsSeen],
+    [currentUser, otherUsername, chatId, isSocketReady, markMessagesAsSeen, setMessages],
   );
 
   useEffect(() => {
-    setMessages([]);
+    const cached = useChatStore.getState().getMessages(chatId);
+    const meta = useChatStore.getState().getMessagesMeta(chatId);
+
+    setMessagesLocal(cached);
     setReplyTo(null);
-    setIsLoading(true);
     setIsLoadingMore(false);
-    setIsInitialLoadDone(false);
-    setShowMessages(false);
-    pageRef.current = 0;
-    hasMoreRef.current = true;
-    initialScrollDoneRef.current = false;
+
+    if (cached.length > 0) {
+      setIsLoading(false);
+      setIsInitialLoadDone(meta?.isInitialLoadDone ?? true);
+      setShowMessages(true);
+      pageRef.current = meta?.page ?? 0;
+      hasMoreRef.current = meta?.hasMore ?? true;
+      initialScrollDoneRef.current = true;
+    } else {
+      setIsLoading(true);
+      setIsInitialLoadDone(false);
+      setShowMessages(false);
+      pageRef.current = 0;
+      hasMoreRef.current = true;
+      initialScrollDoneRef.current = false;
+    }
+
     isLoadingMoreRef.current = false;
-  }, [otherUsername]);
+    fetchedForChatRef.current = null;
+  }, [chatId]);
 
   useLayoutEffect(() => {
     if (!isInitialLoadDone || initialScrollDoneRef.current) return;
@@ -286,16 +334,14 @@ export default function ChatPage() {
   }, [isInitialLoadDone, messages]);
 
   useEffect(() => {
-    if (isSocketReady && currentUser && otherUsername && !isInitialLoadDone) {
-      loadMessages(0, false);
-    }
-  }, [
-    isSocketReady,
-    currentUser,
-    otherUsername,
-    isInitialLoadDone,
-    loadMessages,
-  ]);
+    if (!isSocketReady || !currentUser || !otherUsername) return;
+    if (fetchedForChatRef.current === chatId) return;
+    fetchedForChatRef.current = chatId;
+
+    const cached = useChatStore.getState().getMessages(chatId);
+    const hasCache = cached.length > 0;
+    loadMessages(0, false, hasCache);
+  }, [isSocketReady, currentUser, otherUsername, chatId, loadMessages]);
 
   const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return;
@@ -431,7 +477,8 @@ export default function ChatPage() {
           { user1: currentUser, user2: otherUsername },
           (response: { success?: boolean }) => {
             if (response?.success) {
-              setMessages([]);
+              useChatStore.getState().clearChatMessages(chatId);
+              setMessagesLocal([]);
               toast.success("تاریخچه پیام‌ها پاک شد");
             } else {
               toast.error("خطا در پاک کردن تاریخچه");
@@ -455,7 +502,8 @@ export default function ChatPage() {
     const tempId = Date.now().toString();
     const newMessage: Message = {
       _id: tempId,
-      sender: currentUser,
+      clientKey: tempId,
+      sender: currentUser!,
       receiver: otherUsername,
       text,
       time: new Date(),
@@ -496,7 +544,7 @@ export default function ChatPage() {
               m._id === tempId
                 ? {
                     ...m,
-                    status: "sent" as MessageStatus,
+                    status: "sent" as const,
                     _id: response.messageId,
                   }
                 : m,
@@ -548,7 +596,7 @@ export default function ChatPage() {
           setMessages((prev) => {
             const next = [
               ...prev,
-              { ...msg, status: "delivered" as MessageStatus },
+              { ...msg, status: "delivered" as const },
             ];
             if (msg.sender === otherUsername) {
               markMessagesAsSeen(next);
@@ -589,7 +637,7 @@ export default function ChatPage() {
           setMessages((prev) =>
             prev.map((msg) =>
               messageIds.includes(msg._id)
-                ? { ...msg, seen: true, status: "seen" as MessageStatus }
+                ? { ...msg, seen: true, status: "seen" as const }
                 : msg,
             ),
           );
@@ -600,7 +648,7 @@ export default function ChatPage() {
         setMessages((prev) =>
           prev.map((msg) =>
             msg._id === messageId
-              ? { ...msg, status: "delivered" as MessageStatus }
+              ? { ...msg, status: "delivered" as const }
               : msg,
           ),
         );
@@ -682,7 +730,7 @@ export default function ChatPage() {
   if (!isAuthenticated) return null;
 
   return (
-    <div className="chat-screen h-[100dvh] text-white flex flex-col overflow-hidden relative">
+    <div className="chat-screen h-[100dvh] text-white flex flex-col overflow-hidden relative keyboard-aware">
       {/* عکس پس‌زمینه */}
       <div
         className="absolute inset-0 z-0"
@@ -771,7 +819,7 @@ export default function ChatPage() {
           ) : (
             messages.map((msg) => (
               <MessageBubble
-                key={msg._id}
+                key={msg.clientKey ?? msg._id}
                 message={msg}
                 isOwnMessage={msg.sender === currentUser}
                 currentUser={currentUser}

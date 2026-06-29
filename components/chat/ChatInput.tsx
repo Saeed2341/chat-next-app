@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useVisualViewport } from "@/hooks/useVisualViewport";
 
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
@@ -14,6 +15,7 @@ export default function ChatInput({
   replyTo,
 }: ChatInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  useVisualViewport();
 
   const handleSendMessage = () => {
     if (!inputRef.current) return;

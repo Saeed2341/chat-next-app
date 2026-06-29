@@ -1,104 +1,101 @@
-// src/store/chatStore.ts
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import type { Message, User } from "@/types";
 
-export interface Message {
-  _id?: string;
-  sender: string;
-  receiver: string;
-  text: string;
-  createdAt?: Date;
-  seen?: boolean;
-  isPinned?: boolean;
-  editedAt?: Date | null;
-  status?: "sending" | "sent" | "delivered" | "seen";  // ← این خط را اضافه کنید
-  replyTo?: {
-    messageId: string;
-    text: string;
-    sender: string;
-  };
-}
-
-export interface User {
-  username: string;
-  online: boolean;
-  lastMessage?: string;
-  lastMessageSender?: string;
-  lastMessageId?: string;
-  unread: number;
-  isTyping?: boolean;
+interface MessagesMeta {
+  page: number;
+  hasMore: boolean;
+  isInitialLoadDone: boolean;
 }
 
 interface ChatState {
-  currentUser: string | null;
   users: User[];
+  usersLoaded: boolean;
   messages: Record<string, Message[]>;
-  onlineUsers: Set<string>;
-  setCurrentUser: (username: string | null) => void;
+  messagesMeta: Record<string, MessagesMeta>;
+
   setUsers: (users: User[]) => void;
-  updateUserStatus: (username: string, online: boolean) => void;
-  setTypingStatus: (username: string, isTyping: boolean) => void;
-  addMessage: (chatId: string, message: Message) => void;
-  updateMessageStatus: (chatId: string, messageId: string, status: Partial<Message>) => void;
-  deleteMessage: (chatId: string, messageId: string) => void;
-  clearMessages: (chatId: string) => void;
+  setUsersLoaded: (loaded: boolean) => void;
+
+  getMessages: (chatId: string) => Message[];
+  getMessagesMeta: (chatId: string) => MessagesMeta | undefined;
+  setChatMessages: (
+    chatId: string,
+    messages: Message[],
+    meta?: Partial<MessagesMeta>,
+  ) => void;
+  prependChatMessages: (chatId: string, messages: Message[]) => void;
+  updateMessages: (
+    chatId: string,
+    updater: (prev: Message[]) => Message[],
+  ) => void;
+  clearChatMessages: (chatId: string) => void;
+  setMessagesMeta: (chatId: string, meta: Partial<MessagesMeta>) => void;
 }
 
-export const useChatStore = create<ChatState>((set) => ({
-  currentUser: null,
+const defaultMeta: MessagesMeta = {
+  page: 0,
+  hasMore: true,
+  isInitialLoadDone: false,
+};
+
+export const useChatStore = create<ChatState>((set, get) => ({
   users: [],
+  usersLoaded: false,
   messages: {},
-  onlineUsers: new Set(),
+  messagesMeta: {},
 
-  setCurrentUser: (username) => set({ currentUser: username }),
+  setUsers: (users) => set({ users, usersLoaded: true }),
 
-  setUsers: (users) => set({ users }),
+  setUsersLoaded: (loaded) => set({ usersLoaded: loaded }),
 
-  updateUserStatus: (username, online) =>
+  getMessages: (chatId) => get().messages[chatId] || [],
+
+  getMessagesMeta: (chatId) => get().messagesMeta[chatId],
+
+  setChatMessages: (chatId, messages, meta) =>
     set((state) => ({
-      users: state.users.map((user) =>
-        user.username === username ? { ...user, online } : user
-      ),
-    })),
-
-  setTypingStatus: (username, isTyping) =>
-    set((state) => ({
-      users: state.users.map((user) =>
-        user.username === username ? { ...user, isTyping } : user
-      ),
-    })),
-
-  addMessage: (chatId, message) =>
-    set((state) => ({
-      messages: {
-        ...state.messages,
-        [chatId]: [...(state.messages[chatId] || []), message],
+      messages: { ...state.messages, [chatId]: messages },
+      messagesMeta: {
+        ...state.messagesMeta,
+        [chatId]: { ...defaultMeta, ...state.messagesMeta[chatId], ...meta },
       },
     })),
 
-  updateMessageStatus: (chatId, messageId, status) =>
+  prependChatMessages: (chatId, newMessages) =>
+    set((state) => {
+      const existing = state.messages[chatId] || [];
+      const existingIds = new Set(existing.map((m) => m._id));
+      const filtered = newMessages.filter((m) => !existingIds.has(m._id));
+      return {
+        messages: {
+          ...state.messages,
+          [chatId]: [...filtered, ...existing],
+        },
+      };
+    }),
+
+  updateMessages: (chatId, updater) =>
     set((state) => ({
       messages: {
         ...state.messages,
-        [chatId]: (state.messages[chatId] || []).map((msg) =>
-          msg._id === messageId ? { ...msg, ...status } : msg
-        ),
+        [chatId]: updater(state.messages[chatId] || []),
       },
     })),
 
-  deleteMessage: (chatId, messageId) =>
+  clearChatMessages: (chatId) =>
     set((state) => ({
-      messages: {
-        ...state.messages,
-        [chatId]: (state.messages[chatId] || []).filter((msg) => msg._id !== messageId),
+      messages: { ...state.messages, [chatId]: [] },
+      messagesMeta: {
+        ...state.messagesMeta,
+        [chatId]: { ...defaultMeta },
       },
     })),
 
-  clearMessages: (chatId) =>
+  setMessagesMeta: (chatId, meta) =>
     set((state) => ({
-      messages: {
-        ...state.messages,
-        [chatId]: [],
+      messagesMeta: {
+        ...state.messagesMeta,
+        [chatId]: { ...defaultMeta, ...state.messagesMeta[chatId], ...meta },
       },
     })),
 }));

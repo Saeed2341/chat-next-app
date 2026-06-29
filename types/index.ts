@@ -12,6 +12,7 @@ export interface User {
 
 export interface Message {
   _id?: string;
+  clientKey?: string;
   sender: string;
   receiver: string;
   text: string;

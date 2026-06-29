@@ -7,28 +7,34 @@ import { connectSocket, restoreSocketSession } from "@/lib/socket";
 import { useAuth } from "@/hooks/useAuth";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import UsersList from "@/components/users/UsersList";
-
-interface User {
-  username: string;
-  online: boolean;
-  lastSeen?: Date;
-  lastMessage?: string;
-  lastMessageStatus?: "sending" | "sent" | "delivered" | "seen";
-  lastMessageSender?: string;
-  lastMessageId?: string;
-  unread: number;
-  isTyping?: boolean;
-}
+import { useChatStore } from "@/store/chatStore";
+import { useVisualViewport } from "@/hooks/useVisualViewport";
+import type { User } from "@/types";
 
 export default function ChatListPage() {
   const router = useRouter();
   const { username, isAuthenticated, loading: authLoading, logout } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedUsers = useChatStore((state) => state.users);
+  const usersLoaded = useChatStore((state) => state.usersLoaded);
+  const [users, setUsersState] = useState<User[]>(cachedUsers);
+  const [isLoading, setIsLoading] = useState(!usersLoaded);
+
+  const setUsers = useCallback(
+    (updater: User[] | ((prev: User[]) => User[])) => {
+      setUsersState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        useChatStore.getState().setUsers(next);
+        return next;
+      });
+    },
+    [],
+  );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const socketRef = useRef<any>(null);
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useVisualViewport();
 
   // ریدایرکت به لاگین (با useEffect)
   useEffect(() => {
@@ -38,19 +44,20 @@ export default function ChatListPage() {
   }, [isAuthenticated, authLoading, router]);
 
   const updateUsersList = useCallback((data: User[]) => {
-    setUsers(prevUsers => {
-      const newUsers = data
-        .filter((u) => u.username !== username)
-        .map((u) => ({
-          ...u,
-          unread: u.unread || 0,
-          lastMessageStatus: u.lastMessageStatus,
-          lastMessageSender: u.lastMessageSender,
-          lastMessageId: u.lastMessageId,
-          isTyping: false,
-        }));
-      
+    const newUsers = data
+      .filter((u) => u.username !== username)
+      .map((u) => ({
+        ...u,
+        unread: u.unread || 0,
+        lastMessageStatus: u.lastMessageStatus,
+        lastMessageSender: u.lastMessageSender,
+        lastMessageId: u.lastMessageId,
+        isTyping: false,
+      }));
+
+    setUsersState((prevUsers) => {
       if (JSON.stringify(prevUsers) === JSON.stringify(newUsers)) return prevUsers;
+      useChatStore.getState().setUsers(newUsers);
       return newUsers;
     });
   }, [username]);
@@ -74,6 +81,14 @@ export default function ChatListPage() {
     };
   }, [isMenuOpen]);
 
+  // همگام‌سازی با کش هنگام بازگشت به صفحه
+  useEffect(() => {
+    if (cachedUsers.length > 0) {
+      setUsersState(cachedUsers.filter((u) => u.username !== username));
+      setIsLoading(false);
+    }
+  }, [cachedUsers, username]);
+
   // تنظیم Socket
   useEffect(() => {
     if (!isAuthenticated || !username) return;
@@ -85,6 +100,9 @@ export default function ChatListPage() {
     restoreSocketSession().then(() => {
       if (active) {
         socket.emit("get_users");
+        if (usersLoaded) {
+          setIsLoading(false);
+        }
       }
     });
 
@@ -198,7 +216,7 @@ export default function ChatListPage() {
       typingTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
       typingTimeoutsRef.current.clear();
     };
-  }, [isAuthenticated, username, updateUsersList]);
+  }, [isAuthenticated, username, updateUsersList, usersLoaded]);
 
   const handleLogout = () => {
     setIsMenuOpen(false);
@@ -216,7 +234,7 @@ export default function ChatListPage() {
   }
 
   return (
-    <div className="h-[100dvh] bg-gradient-to-br from-[#0a0a0a] via-[#14141e] to-[#1a1a2e] text-white flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-gradient-to-br from-[#0a0a0a] via-[#14141e] to-[#1a1a2e] text-white flex flex-col overflow-hidden keyboard-aware">
       {/* هدر شیشه‌ای */}
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-4 bg-white/5 backdrop-blur-xl border-b border-white/5 shadow-lg shadow-black/20">
         <div className="text-xl font-bold text-white/90 tracking-wide">
