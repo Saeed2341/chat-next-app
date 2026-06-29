@@ -29,6 +29,7 @@ import {
 import { normalizeAttachmentUrls } from "@/lib/mediaUrl";
 import { downloadImageWithProgress, saveImageBlob } from "@/lib/downloadImage"; // <-- جدید
 import type { Message, MessageAttachment } from "@/types";
+import MessageSkeleton from "@/components/skeletons/MessageSkeleton";
 
 function normalizeMessage(msg: Message): Message {
   if (!msg.attachment) return msg;
@@ -1026,7 +1027,7 @@ export default function ChatPage() {
               if (menuVisible.message.attachment) {
                 handleSaveImageToGallery(
                   menuVisible.message.attachment,
-                  menuVisible.message._id
+                  menuVisible.message._id,
                 );
               }
             }} // <-- جدید
@@ -1071,8 +1072,8 @@ export default function ChatPage() {
           )}
 
           {isLoading ? (
-            <div className="flex justify-center py-10">
-              <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-10 w-full">
+              <MessageSkeleton count={6} />
             </div>
           ) : messages.length === 0 ? (
             <div className="flex justify-center py-10 text-gray-400">

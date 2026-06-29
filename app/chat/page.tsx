@@ -9,6 +9,7 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import UsersList from "@/components/users/UsersList";
 import { useChatStore } from "@/store/chatStore";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
+import UserListSkeleton from "@/components/skeletons/UserListSkeleton";
 import type { User } from "@/types";
 
 export default function ChatListPage() {
@@ -272,7 +273,7 @@ export default function ChatListPage() {
 
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
-          <LoadingSpinner />
+          <UserListSkeleton count={8} />
         </div>
       ) : (
         <UsersList users={users} currentUser={username} />
