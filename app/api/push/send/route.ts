@@ -4,14 +4,32 @@ import { getAuthUser } from '@/lib/auth';
 import webPush from 'web-push';
 import { getPushSubscription, deletePushSubscription } from '@/lib/pushSubscriptions';
 
-webPush.setVapidDetails(
-  'mailto:' + (process.env.VAPID_EMAIL || 'your-email@example.com'),
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+// ===== فقط در صورت وجود کلیدها، تنظیمات VAPID را انجام بده =====
+const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+const email = process.env.VAPID_EMAIL || 'your-email@example.com';
+
+// فقط اگر کلیدها موجود باشند، تنظیمات را انجام بده
+if (publicKey && privateKey) {
+  webPush.setVapidDetails(
+    'mailto:' + email,
+    publicKey,
+    privateKey
+  );
+  console.log('✅ VAPID configured for push notifications');
+} else {
+  console.warn('⚠️ VAPID keys not found, push notifications will not work');
+}
 
 export async function POST(req: NextRequest) {
   try {
+    // اگر کلیدها تنظیم نشده باشند، خطا بده
+    if (!publicKey || !privateKey) {
+      return NextResponse.json({ 
+        error: 'Push notifications are not configured on the server' 
+      }, { status: 500 });
+    }
+
     const user = await getAuthUser(req);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
