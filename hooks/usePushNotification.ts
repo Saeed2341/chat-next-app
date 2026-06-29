@@ -95,7 +95,7 @@ export function usePushNotification(userId?: string) {
 
       if (response.ok) {
         setIsSubscribed(true);
-        toast.success('نوتیفیکیشن با موفقیت فعال شد ✅');
+        toast.success('نوتیفیکیشن با موفقیت فعال شد');
         return true;
       } else {
         throw new Error(data.error || 'خطا در فعال‌سازی');

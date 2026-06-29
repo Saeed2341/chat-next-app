@@ -297,8 +297,15 @@ app.prepare().then(async () => {
           // ===== ارسال نوتیفیکیشن =====
           if (!onlineUsers.has(receiver)) {
             try {
+              console.log(`🔍 Looking for subscription in DB for: ${receiver}`);
+
+              // دریافت اشتراک از دیتابیس
               const user = await User.findOne({ username: receiver });
-              const subscription = user?.getPushSubscription();
+              const subscription = user?.pushSubscription;
+
+              console.log(
+                `📋 Subscription in DB: ${subscription ? "✅ YES" : "❌ NO"}`,
+              );
 
               if (subscription && publicKey && privateKey) {
                 const pushPayload = JSON.stringify({
@@ -311,22 +318,19 @@ app.prepare().then(async () => {
                 });
 
                 await webPush.sendNotification(subscription, pushPayload);
-                console.log(`✅ Notification sent to ${receiver}`);
+                console.log(`✅ Push notification sent to ${receiver}`);
               } else {
                 console.log(`ℹ️ No push subscription for ${receiver}`);
               }
             } catch (pushError) {
-              // اگر اشتراک منقضی شده باشه (410)
+              console.error(`❌ Push error for ${receiver}:`, pushError);
+
               if (pushError.statusCode === 410) {
-                const user = await User.findOne({ username: receiver });
-                if (user) {
-                  await user.removePushSubscription();
-                  console.log(
-                    `🗑️ Expired subscription removed for ${receiver}`,
-                  );
-                }
-              } else {
-                console.error("❌ Push notification error:", pushError);
+                await User.updateOne(
+                  { username: receiver },
+                  { pushSubscription: null },
+                );
+                console.log(`🗑️ Removed expired subscription for ${receiver}`);
               }
             }
           }
