@@ -7,17 +7,25 @@ interface MessagesMeta {
   isInitialLoadDone: boolean;
 }
 
+export interface ChatScrollState {
+  scrollTop: number;
+  isAtBottom: boolean;
+}
+
 interface ChatState {
   users: User[];
   usersLoaded: boolean;
   messages: Record<string, Message[]>;
   messagesMeta: Record<string, MessagesMeta>;
+  scrollPositions: Record<string, ChatScrollState>;
 
   setUsers: (users: User[]) => void;
   setUsersLoaded: (loaded: boolean) => void;
 
   getMessages: (chatId: string) => Message[];
   getMessagesMeta: (chatId: string) => MessagesMeta | undefined;
+  getScrollPosition: (chatId: string) => ChatScrollState | undefined;
+  setScrollPosition: (chatId: string, state: ChatScrollState) => void;
   setChatMessages: (
     chatId: string,
     messages: Message[],
@@ -43,6 +51,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   usersLoaded: false,
   messages: {},
   messagesMeta: {},
+  scrollPositions: {},
 
   setUsers: (users) => set({ users, usersLoaded: true }),
 
@@ -51,6 +60,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   getMessages: (chatId) => get().messages[chatId] || [],
 
   getMessagesMeta: (chatId) => get().messagesMeta[chatId],
+
+  getScrollPosition: (chatId) => get().scrollPositions[chatId],
+
+  setScrollPosition: (chatId, state) =>
+    set((s) => ({
+      scrollPositions: { ...s.scrollPositions, [chatId]: state },
+    })),
 
   setChatMessages: (chatId, messages, meta) =>
     set((state) => ({
@@ -88,6 +104,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messagesMeta: {
         ...state.messagesMeta,
         [chatId]: { ...defaultMeta },
+      },
+      scrollPositions: {
+        ...state.scrollPositions,
+        [chatId]: { scrollTop: 0, isAtBottom: true },
       },
     })),
 

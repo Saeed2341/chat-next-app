@@ -63,13 +63,20 @@ export default function MessageBubble({
 
   const hasImage = message.attachment?.type === "image" && message.attachment.url;
 
+  const handleBubbleClick = (e: React.MouseEvent) => {
+    if (hasImage && (e.target as HTMLElement).closest("[data-image-message]")) {
+      return;
+    }
+    onMessageClick(message, e);
+  };
+
   return (
     <div
       id={`message-${message._id}`}
       className={`flex ${isOwnMessage ? "justify-start" : "justify-end"} ${
         isFirstRender.current ? "animate-fade-in" : ""
       } group`}
-      onClick={(e) => onMessageClick(message, e)}
+      onClick={handleBubbleClick}
     >
       <div
         className={`relative px-3 py-2 break-words cursor-pointer transition hover:brightness-110 shadow-lg ${
@@ -110,7 +117,7 @@ export default function MessageBubble({
         )}
 
         {hasImage && (
-          <div className="mb-1 -mx-1">
+          <div className="mb-1 -mx-1" data-image-message>
             <ImageMessage
               attachment={message.attachment!}
               messageId={message._id}

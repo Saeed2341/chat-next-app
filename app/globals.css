@@ -152,12 +152,25 @@ body {
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(20px); /* پیام از ۲۰ پیکسل پایین‌تر شروع می‌شود */
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes slide-up-menu {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up-menu {
+  animation: slide-up-menu 0.25s ease-out;
 }
 
 .animate-fade-in {

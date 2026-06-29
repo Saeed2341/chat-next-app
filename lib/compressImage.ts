@@ -116,10 +116,25 @@ export async function prepareImageForUpload(
   };
 }
 
-/** @deprecated Use prepareImageForUpload */
-export async function compressImage(file: File): Promise<CompressedImage> {
-  const prepared = await prepareImageForUpload(file);
-  return prepared.full;
+export async function exportScaledImageFile(
+  file: File,
+  scale: number,
+): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not supported");
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const blob = await canvasToBlob(canvas, FULL_QUALITY);
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "image";
+  return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
 }
 
 export function getImageDisplaySize(

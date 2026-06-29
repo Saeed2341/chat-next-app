@@ -5,6 +5,9 @@ import { FiDownload } from "react-icons/fi";
 import type { MessageAttachment } from "@/types";
 import { formatFileSize } from "@/lib/formatFileSize";
 import { getImageDisplaySize } from "@/lib/compressImage";
+import { resolveMediaUrl } from "@/lib/mediaUrl";
+import ImageActionMenu from "@/components/chat/ImageActionMenu";
+import ImageFullscreenViewer from "@/components/chat/ImageFullscreenViewer";
 
 const DOWNLOADED_KEY = "chat_downloaded_images";
 
@@ -36,8 +39,9 @@ export default function ImageMessage({
   isOwnMessage,
 }: ImageMessageProps) {
   const [isDownloaded, setIsDownloaded] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
   const [fullRevealed, setFullRevealed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [fullscreenSrc, setFullscreenSrc] = useState<string | null>(null);
 
   const hasPreview = Boolean(attachment.previewUrl);
   const showFull =
@@ -61,92 +65,100 @@ export default function ImageMessage({
     srcHeight,
   );
 
-  const handleDownload = useCallback(
-    async (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (showFull || isDownloading || !attachment.url) return;
+  const handleImageClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMenuOpen(true);
+  }, []);
 
-      setIsDownloading(true);
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error("Load failed"));
-          img.src = attachment.url;
-        });
-        if (messageId) markDownloaded(messageId);
-        setIsDownloaded(true);
-      } catch {
-        window.open(attachment.url, "_blank");
-      } finally {
-        setIsDownloading(false);
-      }
-    },
-    [attachment.url, isDownloading, messageId, showFull],
-  );
+  const handleDownloadComplete = useCallback(() => {
+    if (messageId) markDownloaded(messageId);
+    setIsDownloaded(true);
+    setFullRevealed(true);
+  }, [messageId]);
 
-  const previewSrc = attachment.previewUrl || attachment.url;
-  const fullSrc = attachment.url;
+  const previewSrc = resolveMediaUrl(attachment.previewUrl || attachment.url);
+  const fullSrc = resolveMediaUrl(attachment.url);
 
   return (
-    <div
-      className="relative rounded-2xl overflow-hidden bg-black/20"
-      style={{ width: displayW, height: displayH }}
-      onClick={!showFull ? handleDownload : undefined}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={previewSrc}
-        alt=""
-        aria-hidden
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-          showFull && fullRevealed ? "opacity-0" : "opacity-100"
-        }`}
-        style={
-          !attachment.previewUrl && !showFull
-            ? { filter: "blur(18px)", transform: "scale(1.05)" }
-            : undefined
-        }
-        loading="lazy"
-      />
-
-      {showFull && (
-        /* eslint-disable-next-line @next/next/no-img-element */
+    <>
+      <div
+        className="relative rounded-2xl overflow-hidden bg-black/20 cursor-pointer"
+        style={{ width: displayW, height: displayH }}
+        onClick={handleImageClick}
+        data-image-message
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={fullSrc}
-          alt={attachment.fileName || "عکس"}
+          src={previewSrc}
+          alt=""
+          aria-hidden
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
-            fullRevealed ? "opacity-100" : "opacity-0"
+            showFull && fullRevealed ? "opacity-0" : "opacity-100"
           }`}
+          style={
+            !attachment.previewUrl && !showFull
+              ? { filter: "blur(18px)", transform: "scale(1.05)" }
+              : undefined
+          }
           loading="lazy"
-          onLoad={() => setFullRevealed(true)}
+        />
+
+        {showFull && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={fullSrc}
+            alt={attachment.fileName || "عکس"}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+              fullRevealed ? "opacity-100" : "opacity-0"
+            }`}
+            loading="lazy"
+            onLoad={() => setFullRevealed(true)}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = previewSrc;
+            }}
+          />
+        )}
+
+        {!showFull && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/20 pointer-events-none">
+            <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center mb-2 border border-white/20">
+              <FiDownload size={22} className="text-white" />
+            </div>
+            {attachment.fileSize != null && (
+              <span className="text-xs text-white/90 font-medium drop-shadow">
+                {formatFileSize(attachment.fileSize)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {menuOpen && (
+        <ImageActionMenu
+          attachment={attachment}
+          isOwnMessage={isOwnMessage}
+          isDownloaded={isDownloaded}
+          onClose={() => setMenuOpen(false)}
+          onDownloadComplete={handleDownloadComplete}
+          onOpenFullscreen={(url) => {
+            setMenuOpen(false);
+            setFullscreenSrc(url);
+          }}
         />
       )}
 
-      {!showFull && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/20 cursor-pointer">
-          {isDownloading ? (
-            <div className="w-10 h-10 border-2 border-white/80 border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center mb-2 border border-white/20">
-                <FiDownload size={22} className="text-white" />
-              </div>
-              {attachment.fileSize != null && (
-                <span className="text-xs text-white/90 font-medium drop-shadow">
-                  {formatFileSize(attachment.fileSize)}
-                </span>
-              )}
-            </>
-          )}
-        </div>
+      {fullscreenSrc && (
+        <ImageFullscreenViewer
+          src={fullscreenSrc}
+          fileName={attachment.fileName}
+          onClose={() => {
+            if (fullscreenSrc.startsWith("blob:")) {
+              URL.revokeObjectURL(fullscreenSrc);
+            }
+            setFullscreenSrc(null);
+          }}
+        />
       )}
-
-      {showFull && fullRevealed && attachment.fileSize != null && (
-        <div className="absolute bottom-1 left-1 z-10 px-1.5 py-0.5 rounded-md bg-black/40 text-[10px] text-white/80">
-          {formatFileSize(attachment.fileSize)}
-        </div>
-      )}
-    </div>
+    </>
   );
 }

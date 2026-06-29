@@ -6,7 +6,7 @@ import { useVisualViewport } from "@/hooks/useVisualViewport";
 
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
-  onSendImage: (file: File) => void;
+  onImageSelected: (file: File) => void;
   onTyping: () => void;
   replyTo: unknown;
   isUploading?: boolean;
@@ -16,7 +16,7 @@ const MAX_TEXTAREA_HEIGHT = 120;
 
 export default function ChatInput({
   onSendMessage,
-  onSendImage,
+  onImageSelected,
   onTyping,
   replyTo,
   isUploading = false,
@@ -61,7 +61,7 @@ export default function ChatInput({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      onSendImage(file);
+      onImageSelected(file);
     }
     e.target.value = "";
   };

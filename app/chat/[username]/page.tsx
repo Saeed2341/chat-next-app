@@ -8,7 +8,7 @@ import {
   useLayoutEffect,
 } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { FiTrash2 } from "react-icons/fi";
+import { FiTrash2, FiChevronDown } from "react-icons/fi";
 import { connectSocket, restoreSocketSession } from "@/lib/socket";
 import { useAuth } from "@/hooks/useAuth";
 import toast from "react-hot-toast";
@@ -19,10 +19,25 @@ import ChatInput from "@/components/chat/ChatInput";
 import ReplyPreview from "@/components/chat/ReplyPreview";
 import MessageMenu from "@/components/chat/MessageMenu";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ImageEditorModal from "@/components/chat/ImageEditorModal";
 import { useChatStore } from "@/store/chatStore";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
-import { prepareImageForUpload } from "@/lib/compressImage";
+import {
+  prepareImageForUpload,
+  exportScaledImageFile,
+} from "@/lib/compressImage";
+import { normalizeAttachmentUrls } from "@/lib/mediaUrl";
 import type { Message, MessageAttachment } from "@/types";
+
+function normalizeMessage(msg: Message): Message {
+  if (!msg.attachment) return msg;
+  return {
+    ...msg,
+    attachment: normalizeAttachmentUrls(
+      msg.attachment,
+    ) as MessageAttachment,
+  };
+}
 
 export default function ChatPage() {
   // ========== دیالوگ تایید ==========
@@ -112,6 +127,8 @@ export default function ChatPage() {
   );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [imageEditorFile, setImageEditorFile] = useState<File | null>(null);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const socketRef = useRef<any>(null);
@@ -124,6 +141,8 @@ export default function ChatPage() {
   const pageRef = useRef(0);
   const hasMoreRef = useRef(true);
   const fetchedForChatRef = useRef<string | null>(null);
+  const isAtBottomRef = useRef(true);
+  const scrollSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // ========== useEffectها ==========
   useEffect(() => {
@@ -144,11 +163,28 @@ export default function ChatPage() {
     };
   }, [isMenuOpen]);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((smooth = false) => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    container.scrollTop = container.scrollHeight;
+    if (smooth) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
+    isAtBottomRef.current = true;
+    setShowScrollDown(false);
   }, []);
+
+  const saveScrollPosition = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isAtBottom = distanceFromBottom < 80;
+    isAtBottomRef.current = isAtBottom;
+    setShowScrollDown(!isAtBottom && container.scrollHeight > clientHeight + 100);
+    useChatStore.getState().setScrollPosition(chatId, { scrollTop, isAtBottom });
+  }, [chatId]);
 
   const markMessagesAsSeen = useCallback(
     (messageList: Message[]) => {
@@ -225,9 +261,10 @@ export default function ChatPage() {
         },
         (msgs: Message[]) => {
           if (!isMountedRef.current) return;
+          const normalizedMsgs = msgs.map(normalizeMessage);
 
           if (isLoadMore) {
-            useChatStore.getState().prependChatMessages(chatId, msgs);
+            useChatStore.getState().prependChatMessages(chatId, normalizedMsgs);
             setMessagesLocal(useChatStore.getState().getMessages(chatId));
 
             requestAnimationFrame(() => {
@@ -238,14 +275,14 @@ export default function ChatPage() {
                 const newScrollHeight =
                   messagesContainerRef.current.scrollHeight;
                 const diff = newScrollHeight - previousScrollHeightRef.current;
-                messagesContainerRef.current.scrollTop = diff;
+                messagesContainerRef.current.scrollTop += diff;
               }
             });
 
-            hasMoreRef.current = msgs.length === 20;
+            hasMoreRef.current = normalizedMsgs.length === 20;
             useChatStore.getState().setMessagesMeta(chatId, {
               page: pageNum,
-              hasMore: msgs.length === 20,
+              hasMore: normalizedMsgs.length === 20,
             });
             setIsLoadingMore(false);
             isLoadingMoreRef.current = false;
@@ -253,7 +290,7 @@ export default function ChatPage() {
             if (silent) {
               setMessages((prev) => {
                 const serverMap = new Map(
-                  msgs.filter((m) => m._id).map((m) => [m._id!, m]),
+                  normalizedMsgs.filter((m) => m._id).map((m) => [m._id!, m]),
                 );
                 const existingIds = new Set(prev.map((m) => m._id));
                 const updated = prev.map((m) => {
@@ -262,25 +299,29 @@ export default function ChatPage() {
                   }
                   return m;
                 });
-                const newMsgs = msgs.filter(
+                const newMsgs = normalizedMsgs.filter(
                   (m) => m._id && !existingIds.has(m._id),
                 );
                 return [...updated, ...newMsgs];
               });
             } else {
-              setMessages(msgs);
+              setMessages(normalizedMsgs);
             }
-            hasMoreRef.current = msgs.length === 20;
+            hasMoreRef.current = normalizedMsgs.length === 20;
             useChatStore.getState().setMessagesMeta(chatId, {
               page: pageNum,
-              hasMore: msgs.length === 20,
+              hasMore: normalizedMsgs.length === 20,
               isInitialLoadDone: true,
             });
             if (!silent) {
               setIsLoading(false);
             }
             setIsInitialLoadDone(true);
-            markMessagesAsSeen(silent ? useChatStore.getState().getMessages(chatId) : msgs);
+            markMessagesAsSeen(
+              silent
+                ? useChatStore.getState().getMessages(chatId)
+                : normalizedMsgs,
+            );
           }
 
           pageRef.current = pageNum;
@@ -301,10 +342,13 @@ export default function ChatPage() {
     if (cached.length > 0) {
       setIsLoading(false);
       setIsInitialLoadDone(meta?.isInitialLoadDone ?? true);
-      setShowMessages(true);
+      setShowMessages(false);
       pageRef.current = meta?.page ?? 0;
       hasMoreRef.current = meta?.hasMore ?? true;
-      initialScrollDoneRef.current = true;
+      initialScrollDoneRef.current = false;
+      const saved = useChatStore.getState().getScrollPosition(chatId);
+      isAtBottomRef.current = saved?.isAtBottom ?? true;
+      setShowScrollDown(saved ? !saved.isAtBottom : false);
     } else {
       setIsLoading(true);
       setIsInitialLoadDone(false);
@@ -321,19 +365,39 @@ export default function ChatPage() {
   useLayoutEffect(() => {
     if (!isInitialLoadDone || initialScrollDoneRef.current) return;
 
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
     if (messages.length === 0) {
       initialScrollDoneRef.current = true;
       setShowMessages(true);
       return;
     }
 
-    const container = messagesContainerRef.current;
-    if (!container) return;
+    const saved = useChatStore.getState().getScrollPosition(chatId);
 
-    container.scrollTop = container.scrollHeight;
+    if (!saved || saved.isAtBottom) {
+      container.scrollTop = container.scrollHeight;
+      isAtBottomRef.current = true;
+      setShowScrollDown(false);
+    } else {
+      container.scrollTop = saved.scrollTop;
+      isAtBottomRef.current = false;
+      setShowScrollDown(true);
+    }
+
     initialScrollDoneRef.current = true;
     setShowMessages(true);
-  }, [isInitialLoadDone, messages]);
+  }, [isInitialLoadDone, messages.length, chatId]);
+
+  useEffect(() => {
+    return () => {
+      saveScrollPosition();
+      if (scrollSaveTimerRef.current) {
+        clearTimeout(scrollSaveTimerRef.current);
+      }
+    };
+  }, [chatId, saveScrollPosition]);
 
   useEffect(() => {
     if (!isSocketReady || !currentUser || !otherUsername) return;
@@ -347,15 +411,27 @@ export default function ChatPage() {
 
   const handleScroll = useCallback(() => {
     if (!messagesContainerRef.current) return;
+
+    const container = messagesContainerRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isAtBottom = distanceFromBottom < 80;
+    isAtBottomRef.current = isAtBottom;
+    setShowScrollDown(!isAtBottom && scrollHeight > clientHeight + 100);
+
+    if (scrollSaveTimerRef.current) {
+      clearTimeout(scrollSaveTimerRef.current);
+    }
+    scrollSaveTimerRef.current = setTimeout(saveScrollPosition, 120);
+
     if (isLoadingMoreRef.current || !hasMoreRef.current || !isInitialLoadDone) {
       return;
     }
 
-    const { scrollTop } = messagesContainerRef.current;
-    if (scrollTop < 200) {
+    if (scrollTop < 600) {
       loadMessages(pageRef.current + 1, true);
     }
-  }, [isInitialLoadDone, loadMessages]);
+  }, [isInitialLoadDone, loadMessages, saveScrollPosition]);
 
   const sendTypingStatus = useCallback(
     (isTyping: boolean) => {
@@ -522,7 +598,8 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, newMessage]);
     setReplyTo(null);
-    requestAnimationFrame(scrollToBottom);
+    isAtBottomRef.current = true;
+    requestAnimationFrame(() => scrollToBottom());
 
     socketRef.current.emit(
       "private_message",
@@ -557,6 +634,21 @@ export default function ChatPage() {
     );
   };
 
+  const handleImageSelected = (file: File) => {
+    setImageEditorFile(file);
+  };
+
+  const handleImageEditorConfirm = async (file: File, scale: number) => {
+    setImageEditorFile(null);
+    try {
+      const processed =
+        scale < 1 ? await exportScaledImageFile(file, scale) : file;
+      await sendImage(processed);
+    } catch {
+      toast.error("خطا در پردازش عکس");
+    }
+  };
+
   const sendImage = async (file: File) => {
     if (!socketRef.current || !currentUser || isUploading) return;
 
@@ -586,7 +678,7 @@ export default function ChatPage() {
       if (!res.ok) throw new Error("Upload failed");
 
       const data = await res.json();
-      const attachment: MessageAttachment = {
+      const attachment: MessageAttachment = normalizeAttachmentUrls({
         type: "image",
         url: data.url,
         previewUrl: data.previewUrl,
@@ -596,7 +688,7 @@ export default function ChatPage() {
         mimeType: data.mimeType,
         width: prepared.originalWidth,
         height: prepared.originalHeight,
-      };
+      });
 
       const currentReply = replyTo;
       const tempId = Date.now().toString();
@@ -621,7 +713,8 @@ export default function ChatPage() {
 
       setMessages((prev) => [...prev, newMessage]);
       setReplyTo(null);
-      requestAnimationFrame(scrollToBottom);
+      isAtBottomRef.current = true;
+      requestAnimationFrame(() => scrollToBottom());
 
       socketRef.current.emit(
         "private_message",
@@ -700,17 +793,21 @@ export default function ChatPage() {
           (msg.sender === currentUser && msg.receiver === otherUsername) ||
           (msg.sender === otherUsername && msg.receiver === currentUser)
         ) {
+          const normalized = normalizeMessage(msg);
+
           setMessages((prev) => {
             const next = [
               ...prev,
-              { ...msg, status: "delivered" as const },
+              { ...normalized, status: "delivered" as const },
             ];
             if (msg.sender === otherUsername) {
               markMessagesAsSeen(next);
             }
             return next;
           });
-          requestAnimationFrame(scrollToBottom);
+          if (isAtBottomRef.current) {
+            requestAnimationFrame(() => scrollToBottom());
+          }
         }
       };
 
@@ -864,6 +961,14 @@ export default function ChatPage() {
           confirmButtonColor={dialogState.confirmButtonColor}
         />
 
+        {imageEditorFile && (
+          <ImageEditorModal
+            file={imageEditorFile}
+            onConfirm={handleImageEditorConfirm}
+            onCancel={() => setImageEditorFile(null)}
+          />
+        )}
+
         {menuVisible && (
           <MessageMenu
             message={menuVisible.message}
@@ -938,6 +1043,17 @@ export default function ChatPage() {
         </div>
 
         <div className="relative z-20 mt-auto shrink-0">
+          {showScrollDown && (
+            <button
+              type="button"
+              onClick={() => scrollToBottom(true)}
+              className="absolute -top-14 right-4 z-30 w-11 h-11 rounded-full bg-[#202c33]/95 backdrop-blur-sm border border-white/15 shadow-lg flex items-center justify-center hover:bg-[#2a3942] transition-all"
+              aria-label="رفتن به آخرین پیام"
+            >
+              <FiChevronDown size={22} className="text-white" />
+            </button>
+          )}
+
           <ReplyPreview
             replyTo={replyTo}
             currentUser={currentUser}
@@ -946,7 +1062,7 @@ export default function ChatPage() {
 
           <ChatInput
             onSendMessage={sendMessage}
-            onSendImage={sendImage}
+            onImageSelected={handleImageSelected}
             onTyping={handleTyping}
             replyTo={replyTo}
             isUploading={isUploading}

@@ -3,7 +3,9 @@ const next = require("next");
 const { Server } = require("socket.io");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser"); // اضافه شود
+const cookieParser = require("cookie-parser");
+const fs = require("fs");
+const path = require("path");
 
 const { connectDB } = require("./lib/db");
 const User = require("./models/User");
@@ -32,8 +34,29 @@ app.prepare().then(async () => {
     process.exit(1);
   }
 
+  const MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+  };
+
   const server = createServer((req, res) => {
-    // اضافه کردن cookie-parser به درخواست‌ها
+    const urlPath = req.url?.split("?")[0] || "";
+    if (urlPath.startsWith("/uploads/")) {
+      const filePath = path.join(process.cwd(), "public", urlPath);
+      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        const ext = path.extname(filePath).toLowerCase();
+        res.writeHead(200, {
+          "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
+          "Cache-Control": "public, max-age=31536000, immutable",
+        });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+      }
+    }
+
     cookieParser()(req, res, (err) => {
       if (err) {
         console.error("Cookie parser error:", err);

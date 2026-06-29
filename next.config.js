@@ -9,6 +9,13 @@ const runtimeCaching = [
       cacheName: 'socket-io',
     },
   },
+  {
+    urlPattern: /\/uploads\/.*/i,
+    handler: 'NetworkOnly',
+    options: {
+      cacheName: 'uploads',
+    },
+  },
   ...defaultCache.map((entry) => {
     if (entry.options?.cacheName === 'others') {
       return {
@@ -18,6 +25,7 @@ const runtimeCaching = [
           if (!isSameOrigin) return false;
           if (url.pathname.startsWith('/socket.io/')) return false;
           if (url.pathname.startsWith('/api/')) return false;
+          if (url.pathname.startsWith('/uploads/')) return false;
           return true;
         },
       };
