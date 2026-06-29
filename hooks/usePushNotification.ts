@@ -1,6 +1,7 @@
 // hooks/usePushNotification.ts
 import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import io from 'socket.io-client';
 
 export function usePushNotification(userId?: string) {
   const [isSupported, setIsSupported] = useState(false);
@@ -45,7 +46,7 @@ export function usePushNotification(userId?: string) {
     setIsLoading(true);
 
     try {
-      // ثبت سرویس‌ورکر
+      // 1. ثبت سرویس‌ورکر
       let registration = await navigator.serviceWorker.getRegistration('/');
       if (!registration) {
         registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
@@ -60,7 +61,7 @@ export function usePushNotification(userId?: string) {
 
       registration = await navigator.serviceWorker.ready;
 
-      // درخواست مجوز
+      // 2. درخواست مجوز
       const permissionResult = await Notification.requestPermission();
       setPermission(permissionResult);
 
@@ -69,39 +70,51 @@ export function usePushNotification(userId?: string) {
         return false;
       }
 
+      // 3. دریافت کلید VAPID
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!publicKey) {
         toast.error('کلید عمومی نوتیفیکیشن تنظیم نشده است');
         return false;
       }
 
-      // ساخت اشتراک
+      // 4. ساخت اشتراک
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: publicKey,
       });
 
-      // ذخیره اشتراک در API
-      const response = await fetch('/api/push/send', {
+      console.log('✅ اشتراک ساخته شد:', subscription);
+
+      // ===== 5. ذخیره اشتراک در دیتابیس از طریق Socket =====
+      const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || '');
+      socket.emit('save_push_subscription', {
+        subscription,
+        userId
+      });
+      socket.disconnect();
+
+      // ===== 6. ذخیره اشتراک در API Route (برای تست) =====
+      const response = await fetch('/api/push/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
           subscription,
-        }),
+          userId
+        })
       });
 
       const data = await response.json();
+      console.log('📨 پاسخ سرور:', data);
 
       if (response.ok) {
         setIsSubscribed(true);
-        toast.success('نوتیفیکیشن با موفقیت فعال شد');
+        toast.success('نوتیفیکیشن با موفقیت فعال شد ✅');
         return true;
       } else {
         throw new Error(data.error || 'خطا در فعال‌سازی');
       }
     } catch (error) {
-      console.error('❌ Error:', error);
+      console.error('❌ خطا:', error);
       toast.error('خطا: ' + (error instanceof Error ? error.message : 'مشخص نیست'));
       return false;
     } finally {
@@ -116,12 +129,19 @@ export function usePushNotification(userId?: string) {
 
       if (subscription) {
         await subscription.unsubscribe();
+        
+        // حذف از دیتابیس
+        const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || '');
+        socket.emit('remove_push_subscription', { userId });
+        socket.disconnect();
+
         setIsSubscribed(false);
         toast.success('نوتیفیکیشن غیرفعال شد');
         return true;
       }
       return false;
     } catch (error) {
+      console.error('❌ خطا:', error);
       toast.error('خطا در غیرفعال‌سازی');
       return false;
     }

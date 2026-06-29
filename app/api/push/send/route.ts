@@ -2,9 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import webPush from 'web-push';
 
-// ===== استفاده از require برای فایل‌های CommonJS =====
+// ===== استفاده از require =====
 const { connectDB } = require('@/lib/db');
-const User = require('@/models/User');
+const UserModel = require('@/models/User');
 
 // ===== تنظیم VAPID =====
 const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -14,13 +14,10 @@ const email = process.env.VAPID_EMAIL || 'cursorsaeed@gmail.com';
 if (publicKey && privateKey) {
   webPush.setVapidDetails('mailto:' + email, publicKey, privateKey);
   console.log('✅ VAPID configured in API route');
-} else {
-  console.error('❌ VAPID keys missing in API route');
 }
 
 export async function POST(req: NextRequest) {
   try {
-    // بررسی کلیدها
     if (!publicKey || !privateKey) {
       return NextResponse.json(
         { error: 'Push notifications are not configured on the server' },
@@ -28,18 +25,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    const { userId, message } = body;
+    const { userId, message } = await req.json();
 
     if (!userId || !message) {
       return NextResponse.json({ error: 'Missing data' }, { status: 400 });
     }
 
-    // ===== دریافت اشتراک از دیتابیس =====
     await connectDB();
     
-    // استفاده از `findOne` با روش ساده‌تر
-    const user = await User.findOne({ username: userId }).lean();
+    // ===== استفاده از any برای رفع خطا =====
+    const User: any = UserModel;
+    const user = await User.findOne({ username: userId });
     const subscription = user?.pushSubscription;
 
     if (!subscription) {
@@ -49,7 +45,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ساخت payload
     const payload = JSON.stringify({
       title: `📩 پیام از ${message.sender}`,
       body: message.text || 'یک عکس جدید',
@@ -59,7 +54,6 @@ export async function POST(req: NextRequest) {
       sender: message.sender,
     });
 
-    // ارسال نوتیفیکیشن
     await webPush.sendNotification(subscription, payload);
     console.log(`✅ Notification sent to ${userId}`);
 
@@ -73,6 +67,7 @@ export async function POST(req: NextRequest) {
     if (error.statusCode === 410) {
       const { userId } = await req.json();
       await connectDB();
+      const User: any = UserModel;
       await User.updateOne(
         { username: userId },
         { pushSubscription: null }
