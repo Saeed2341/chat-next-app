@@ -4,23 +4,8 @@ import { BsCheck, BsCheckAll } from "react-icons/bs";
 import { HiOutlineClock } from "react-icons/hi";
 import { FiMapPin } from "react-icons/fi";
 import { useRef, useEffect } from "react";
-
-interface Message {
-  _id?: string;
-  sender: string;
-  text: string;
-  time?: Date;
-  createdAt?: Date;
-  status?: "sending" | "sent" | "delivered" | "seen";
-  seen?: boolean;
-  isPinned?: boolean;
-  editedAt?: Date;
-  replyTo?: {
-    messageId: string;
-    text: string;
-    sender: string;
-  };
-}
+import type { Message } from "@/types";
+import ImageMessage from "@/components/chat/ImageMessage";
 
 interface MessageBubbleProps {
   message: Message;
@@ -43,9 +28,9 @@ export default function MessageBubble({
     isFirstRender.current = false;
   }, []);
 
-  const formatTime = (date: any) => {
+  const formatTime = (date: unknown) => {
     if (!date) return "";
-    const d = new Date(date);
+    const d = new Date(date as string | Date);
     return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
@@ -55,7 +40,9 @@ export default function MessageBubble({
     }
     switch (status) {
       case "sending":
-        return <HiOutlineClock size={14} className="text-gray-400 animate-pulse" />;
+        return (
+          <HiOutlineClock size={14} className="text-gray-400 animate-pulse" />
+        );
       case "sent":
         return <BsCheck size={16} className="text-gray-300 font-bold" />;
       case "delivered":
@@ -74,6 +61,8 @@ export default function MessageBubble({
     }
   };
 
+  const hasImage = message.attachment?.type === "image" && message.attachment.url;
+
   return (
     <div
       id={`message-${message._id}`}
@@ -83,19 +72,20 @@ export default function MessageBubble({
       onClick={(e) => onMessageClick(message, e)}
     >
       <div
-        className={`relative px-4 py-2 max-w-[75%] break-words cursor-pointer transition hover:brightness-110 shadow-lg ${
+        className={`relative px-3 py-2 break-words cursor-pointer transition hover:brightness-110 shadow-lg ${
+          hasImage ? "max-w-[85%] p-1.5" : "max-w-[75%]"
+        } ${
           isOwnMessage
             ? "bg-green-500/20 backdrop-blur-sm border border-green-500/20 shadow-green-500/10 rounded-3xl rounded-br-none"
             : "bg-white/10 backdrop-blur-sm border border-white/10 shadow-black/20 rounded-3xl rounded-bl-none"
-        } ${message.isPinned ? "ring-2 ring-yellow-500/50" : ""}`}
+        } ${message.isPinned ? "ring-2 ring-yellow-500/50" : ""} ${hasImage ? "overflow-hidden" : ""}`}
       >
         {message.isPinned && (
-          <div className="absolute -top-2 -right-2">
+          <div className="absolute -top-2 -right-2 z-10">
             <FiMapPin size={12} className="text-yellow-500 rotate-45" />
           </div>
         )}
 
-        {/* بخش پاسخ به پیام */}
         {message.replyTo && message.replyTo.messageId && (
           <div
             className={`mb-1 pb-1 pr-2 cursor-pointer hover:opacity-80 transition ${
@@ -114,31 +104,53 @@ export default function MessageBubble({
                 : `پاسخ به ${message.replyTo.sender}`}
             </div>
             <div className="text-xs text-gray-400 truncate max-w-[200px]">
-              {message.replyTo.text}
+              {message.replyTo.text || "📷 عکس"}
             </div>
           </div>
         )}
 
-        {/* کانتینر اصلی: متن + زمان با flex-wrap */}
-        <div className="flex flex-row-reverse flex-wrap items-baseline justify-end gap-x-1 gap-y-0">
-          {/* متن پیام */}
-          <span className="text-[15px] text-white/90 break-words whitespace-pre-wrap text-right">
-            {message.text}
-          </span>
+        {hasImage && (
+          <div className="mb-1 -mx-1">
+            <ImageMessage
+              attachment={message.attachment!}
+              messageId={message._id}
+              isOwnMessage={isOwnMessage}
+            />
+          </div>
+        )}
 
-          {/* زمان و وضعیت */}
-          <span className="flex items-center gap-0.5 text-[10px] text-gray-400 leading-none shrink-0">
+        {(message.text || !hasImage) && (
+          <div className="flex flex-row-reverse flex-wrap items-baseline justify-end gap-x-1 gap-y-0 px-1">
+            {message.text && (
+              <span className="text-[15px] text-white/90 break-words whitespace-pre-wrap text-right">
+                {message.text}
+              </span>
+            )}
+
+            <span className="flex items-center gap-0.5 text-[10px] text-gray-400 leading-none shrink-0">
+              <span>{formatTime(message.time || message.createdAt)}</span>
+              {isOwnMessage && (
+                <span className="inline-flex">
+                  {getMessageStatusIcon(message.status, message.seen)}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {hasImage && !message.text && (
+          <div className="flex items-center justify-end gap-0.5 text-[10px] text-gray-400 px-1 mt-0.5">
             <span>{formatTime(message.time || message.createdAt)}</span>
             {isOwnMessage && (
               <span className="inline-flex">
                 {getMessageStatusIcon(message.status, message.seen)}
               </span>
             )}
-          </span>
-        </div>
+          </div>
+        )}
 
         {message.editedAt && (
-          <div className="text-[10px] text-gray-400 text-left mt-0.5">
+          <div className="text-[10px] text-gray-400 text-left mt-0.5 px-1">
             (ویرایش شده)
           </div>
         )}

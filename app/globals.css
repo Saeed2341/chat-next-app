@@ -78,6 +78,27 @@ body {
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  .chat-header-glass {
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    pointer-events: none;
+  }
+
+  .chat-header-glass > * {
+    pointer-events: auto;
+  }
+
+  .chat-textarea {
+    min-height: 44px;
+    max-height: 120px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .chat-messages-area {
+    -webkit-overflow-scrolling: touch;
+  }
+
   /* اسکرول بار سفارشی */
   ::-webkit-scrollbar {
     width: 6px;

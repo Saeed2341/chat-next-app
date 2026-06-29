@@ -10,6 +10,18 @@ export interface User {
   isTyping?: boolean;
 }
 
+export interface MessageAttachment {
+  type: "image";
+  url: string;
+  previewUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  previewFileSize?: number;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+}
+
 export interface Message {
   _id?: string;
   clientKey?: string;
@@ -22,6 +34,7 @@ export interface Message {
   seen?: boolean;
   isPinned?: boolean;
   editedAt?: Date;
+  attachment?: MessageAttachment | null;
   replyTo?: {
     messageId: string;
     text: string;

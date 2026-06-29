@@ -21,7 +21,8 @@ import MessageMenu from "@/components/chat/MessageMenu";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useChatStore } from "@/store/chatStore";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
-import type { Message } from "@/types";
+import { prepareImageForUpload } from "@/lib/compressImage";
+import type { Message, MessageAttachment } from "@/types";
 
 export default function ChatPage() {
   // ========== دیالوگ تایید ==========
@@ -110,6 +111,7 @@ export default function ChatPage() {
     () => useChatStore.getState().getMessages(chatId).length > 0,
   );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const socketRef = useRef<any>(null);
@@ -537,7 +539,7 @@ export default function ChatPage() {
             }
           : null,
       },
-      (response: any) => {
+      (response: { success?: boolean; messageId?: string }) => {
         if (response?.success && isMountedRef.current) {
           setMessages((prev) =>
             prev.map((m) =>
@@ -553,6 +555,111 @@ export default function ChatPage() {
         }
       },
     );
+  };
+
+  const sendImage = async (file: File) => {
+    if (!socketRef.current || !currentUser || isUploading) return;
+
+    setIsUploading(true);
+    sendTypingStatus(false);
+
+    try {
+      const prepared = await prepareImageForUpload(file);
+      const formData = new FormData();
+      formData.append(
+        "file",
+        prepared.full.blob,
+        file.name.replace(/\.[^.]+$/, ".jpg"),
+      );
+      formData.append(
+        "preview",
+        prepared.preview.blob,
+        file.name.replace(/\.[^.]+$/, "-preview.jpg"),
+      );
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      const data = await res.json();
+      const attachment: MessageAttachment = {
+        type: "image",
+        url: data.url,
+        previewUrl: data.previewUrl,
+        fileName: file.name,
+        fileSize: data.fileSize,
+        previewFileSize: data.previewFileSize,
+        mimeType: data.mimeType,
+        width: prepared.originalWidth,
+        height: prepared.originalHeight,
+      };
+
+      const currentReply = replyTo;
+      const tempId = Date.now().toString();
+      const newMessage: Message = {
+        _id: tempId,
+        clientKey: tempId,
+        sender: currentUser,
+        receiver: otherUsername,
+        text: "",
+        time: new Date(),
+        status: "sending",
+        seen: false,
+        attachment,
+        replyTo: currentReply
+          ? {
+              messageId: currentReply._id!,
+              text: currentReply.text || "📷 عکس",
+              sender: currentReply.sender,
+            }
+          : undefined,
+      };
+
+      setMessages((prev) => [...prev, newMessage]);
+      setReplyTo(null);
+      requestAnimationFrame(scrollToBottom);
+
+      socketRef.current.emit(
+        "private_message",
+        {
+          sender: currentUser,
+          receiver: otherUsername,
+          text: "",
+          tempId,
+          attachment,
+          replyTo: currentReply
+            ? {
+                messageId: currentReply._id,
+                text: currentReply.text || "📷 عکس",
+                sender: currentReply.sender,
+              }
+            : null,
+        },
+        (response: { success?: boolean; messageId?: string }) => {
+          if (response?.success && isMountedRef.current) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m._id === tempId
+                  ? {
+                      ...m,
+                      status: "sent" as const,
+                      _id: response.messageId,
+                    }
+                  : m,
+              ),
+            );
+          }
+        },
+      );
+    } catch {
+      toast.error("خطا در ارسال عکس");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   useEffect(() => {
@@ -797,13 +904,13 @@ export default function ChatPage() {
 
         <div
           ref={messagesContainerRef}
-          className={`flex-1 overflow-y-auto p-4 space-y-2 min-h-0 ${
+          className={`absolute inset-0 overflow-y-auto p-4 pt-[84px] pb-28 space-y-2 chat-messages-area ${
             showMessages ? "opacity-100" : "opacity-0"
           } [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent`}
           onScroll={handleScroll}
         >
           {isLoadingMore && (
-            <div className="flex justify-center py-3 sticky top-0 z-10">
+            <div className="flex justify-center py-3 sticky top-[72px] z-10">
               <div className="w-6 h-6 border-3 border-green-500 border-t-transparent rounded-full animate-spin" />
             </div>
           )}
@@ -830,17 +937,21 @@ export default function ChatPage() {
           )}
         </div>
 
-        <ReplyPreview
-          replyTo={replyTo}
-          currentUser={currentUser}
-          onCancel={cancelReply}
-        />
+        <div className="relative z-20 mt-auto shrink-0">
+          <ReplyPreview
+            replyTo={replyTo}
+            currentUser={currentUser}
+            onCancel={cancelReply}
+          />
 
-        <ChatInput
-          onSendMessage={sendMessage}
-          onTyping={handleTyping}
-          replyTo={replyTo}
-        />
+          <ChatInput
+            onSendMessage={sendMessage}
+            onSendImage={sendImage}
+            onTyping={handleTyping}
+            replyTo={replyTo}
+            isUploading={isUploading}
+          />
+        </div>
 
         <style jsx global>{`
           .highlight-message {

@@ -175,12 +175,12 @@ app.prepare().then(async () => {
     // ================= PRIVATE MESSAGE =================
     socket.on(
       "private_message",
-      async ({ sender, receiver, text, tempId, replyTo }, cb) => {
+      async ({ sender, receiver, text, tempId, replyTo, attachment }, cb) => {
         try {
           const msgData = {
             sender,
             receiver,
-            text,
+            text: text || "",
             seen: false,
             delivered: true,
             deliveredAt: new Date(),
@@ -194,17 +194,27 @@ app.prepare().then(async () => {
             };
           }
 
+          if (attachment && attachment.url) {
+            msgData.attachment = attachment;
+          }
+
+          if (!msgData.text && !msgData.attachment) {
+            if (cb) cb({ success: false, error: "Empty message" });
+            return;
+          }
+
           const msg = await Message.create(msgData);
 
           const payload = {
             _id: msg._id.toString(),
             sender,
             receiver,
-            text,
+            text: msg.text,
             time: msg.createdAt,
             createdAt: msg.createdAt,
             status: "delivered",
             replyTo: msg.replyTo || null,
+            attachment: msg.attachment || null,
           };
 
           const rSocket = onlineUsers.get(receiver);
@@ -427,6 +437,7 @@ app.prepare().then(async () => {
             isPinned: msg.isPinned || false,
             editedAt: msg.editedAt || null,
             replyTo: msg.replyTo || null,
+            attachment: msg.attachment || null,
           }));
 
           cb(formattedMessages);
@@ -512,7 +523,9 @@ app.prepare().then(async () => {
             username: u.username,
             online: onlineUsers.has(u.username),
             lastSeen: u.lastSeen,
-            lastMessage: lastMessage?.text || "",
+            lastMessage: lastMessage?.attachment
+              ? "📷 عکس"
+              : lastMessage?.text || "",
             lastMessageStatus: lastMessageStatus,
             lastMessageSender: lastMessageSender,
             lastMessageId: lastMessage?._id?.toString(),
