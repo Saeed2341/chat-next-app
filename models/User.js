@@ -26,6 +26,11 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: "#00a884",
     },
+    // ===== اضافه کردن فیلد pushSubscription =====
+    pushSubscription: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
   },
   { timestamps: true }
 );
@@ -37,5 +42,27 @@ UserSchema.pre("save", function (next) {
   }
   next();
 });
+
+// ===== متدهای کمکی برای مدیریت اشتراک Push =====
+UserSchema.methods.savePushSubscription = async function(subscription) {
+  this.pushSubscription = subscription;
+  await this.save();
+  return this;
+};
+
+UserSchema.methods.removePushSubscription = async function() {
+  this.pushSubscription = null;
+  await this.save();
+  return this;
+};
+
+UserSchema.methods.getPushSubscription = function() {
+  return this.pushSubscription;
+};
+
+// ===== استاتیک متد برای پیدا کردن کاربر با اشتراک =====
+UserSchema.statics.findByPushSubscription = function(subscription) {
+  return this.findOne({ pushSubscription: subscription });
+};
 
 module.exports = mongoose.models.User || mongoose.model("User", UserSchema);

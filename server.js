@@ -1,4 +1,4 @@
-const dotenv = require('dotenv')
+const dotenv = require("dotenv");
 dotenv.config();
 const { createServer } = require("http");
 const next = require("next");
@@ -145,7 +145,7 @@ app.prepare().then(async () => {
         socketUsers.set(socket.id, username);
         await User.updateOne(
           { username },
-          { isOnline: true, lastSeen: new Date() }
+          { isOnline: true, lastSeen: new Date() },
         );
         await emitUsersToAll(io);
 
@@ -180,7 +180,7 @@ app.prepare().then(async () => {
 
         await User.updateOne(
           { username },
-          { isOnline: true, lastSeen: new Date() }
+          { isOnline: true, lastSeen: new Date() },
         );
 
         await emitUsersToAll(io);
@@ -204,9 +204,34 @@ app.prepare().then(async () => {
     });
 
     // ================= SAVE PUSH SUBSCRIPTION =================
-    socket.on("save_push_subscription", ({ subscription, userId }) => {
-      if (subscription && userId) {
-        pushSubscriptions.set(userId, subscription);
+    socket.on("save_push_subscription", async ({ subscription, userId }) => {
+      try {
+        if (subscription && userId) {
+          const user = await User.findOne({ username: userId });
+          if (user) {
+            await user.savePushSubscription(subscription);
+            console.log(`✅ Push subscription saved to DB for ${userId}`);
+          } else {
+            console.log(`❌ User not found: ${userId}`);
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error saving push subscription:", error);
+      }
+    });
+
+    // ================= REMOVE PUSH SUBSCRIPTION =================
+    socket.on("remove_push_subscription", async ({ userId }) => {
+      try {
+        if (userId) {
+          const user = await User.findOne({ username: userId });
+          if (user) {
+            await user.removePushSubscription();
+            console.log(`🗑️ Push subscription removed for ${userId}`);
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error removing push subscription:", error);
       }
     });
 
@@ -271,20 +296,38 @@ app.prepare().then(async () => {
 
           // ===== ارسال نوتیفیکیشن =====
           if (!onlineUsers.has(receiver)) {
-            const subscription = pushSubscriptions.get(receiver);
-            if (subscription && publicKey && privateKey) {
-              const pushPayload = JSON.stringify({
-                title: `📩 پیام از ${sender}`,
-                body: text || "یک عکس جدید",
-                icon: "/icons/icon-192x192.png",
-                url: `/chat/${sender}`,
-                messageId: msg._id.toString(),
-                sender: sender,
-              });
+            try {
+              const user = await User.findOne({ username: receiver });
+              const subscription = user?.getPushSubscription();
 
-              webPush
-                .sendNotification(subscription, pushPayload)
-                .catch(() => {});
+              if (subscription && publicKey && privateKey) {
+                const pushPayload = JSON.stringify({
+                  title: `📩 پیام از ${sender}`,
+                  body: text || "یک عکس جدید",
+                  icon: "/icons/icon-192x192.png",
+                  url: `/chat/${sender}`,
+                  messageId: msg._id.toString(),
+                  sender: sender,
+                });
+
+                await webPush.sendNotification(subscription, pushPayload);
+                console.log(`✅ Notification sent to ${receiver}`);
+              } else {
+                console.log(`ℹ️ No push subscription for ${receiver}`);
+              }
+            } catch (pushError) {
+              // اگر اشتراک منقضی شده باشه (410)
+              if (pushError.statusCode === 410) {
+                const user = await User.findOne({ username: receiver });
+                if (user) {
+                  await user.removePushSubscription();
+                  console.log(
+                    `🗑️ Expired subscription removed for ${receiver}`,
+                  );
+                }
+              } else {
+                console.error("❌ Push notification error:", pushError);
+              }
             }
           }
 
@@ -299,7 +342,7 @@ app.prepare().then(async () => {
             cb({ success: false, error: error.message });
           }
         }
-      }
+      },
     );
 
     // ================= MESSAGE SEEN =================
@@ -307,7 +350,7 @@ app.prepare().then(async () => {
       try {
         await Message.updateMany(
           { _id: { $in: messageIds }, sender, receiver },
-          { seen: true, seenAt: new Date() }
+          { seen: true, seenAt: new Date() },
         );
 
         const senderSocket = onlineUsers.get(sender);
@@ -359,7 +402,7 @@ app.prepare().then(async () => {
         try {
           await Message.updateOne(
             { _id: messageId, sender },
-            { text: newText, editedAt: new Date() }
+            { text: newText, editedAt: new Date() },
           );
 
           const receiverSocket = onlineUsers.get(receiver);
@@ -377,7 +420,7 @@ app.prepare().then(async () => {
           console.error("❌ Edit message error:", error);
           if (cb) cb({ success: false, error: error.message });
         }
-      }
+      },
     );
 
     // ================= DELETE MESSAGE =================
@@ -423,7 +466,7 @@ app.prepare().then(async () => {
           console.error("❌ Pin message error:", error);
           if (cb) cb({ success: false, error: error.message });
         }
-      }
+      },
     );
 
     // ================= TYPING INDICATOR =================
@@ -481,8 +524,8 @@ app.prepare().then(async () => {
                 ? msg.seen
                   ? "seen"
                   : onlineUsers.has(msg.receiver)
-                  ? "delivered"
-                  : "sent"
+                    ? "delivered"
+                    : "sent"
                 : undefined,
             isPinned: msg.isPinned || false,
             editedAt: msg.editedAt || null,
@@ -495,7 +538,7 @@ app.prepare().then(async () => {
           console.error("❌ Load messages error:", error);
           cb([]);
         }
-      }
+      },
     );
 
     // ================= DISCONNECT =================
@@ -519,7 +562,7 @@ app.prepare().then(async () => {
       if (disconnectedUser) {
         await User.updateOne(
           { username: disconnectedUser },
-          { isOnline: false, lastSeen: new Date() }
+          { isOnline: false, lastSeen: new Date() },
         );
         await emitUsersToAll(io);
       }
@@ -557,8 +600,8 @@ app.prepare().then(async () => {
               lastMessageStatus = lastMessage.seen
                 ? "seen"
                 : onlineUsers.has(u.username)
-                ? "delivered"
-                : "sent";
+                  ? "delivered"
+                  : "sent";
             }
           }
 
@@ -580,7 +623,7 @@ app.prepare().then(async () => {
             lastMessageId: lastMessage?._id?.toString(),
             unread: unreadCount,
           };
-        })
+        }),
       );
 
       return usersWithDetails.filter(Boolean);
