@@ -33,9 +33,7 @@ function normalizeMessage(msg: Message): Message {
   if (!msg.attachment) return msg;
   return {
     ...msg,
-    attachment: normalizeAttachmentUrls(
-      msg.attachment,
-    ) as MessageAttachment,
+    attachment: normalizeAttachmentUrls(msg.attachment) as MessageAttachment,
   };
 }
 
@@ -182,8 +180,12 @@ export default function ChatPage() {
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const isAtBottom = distanceFromBottom < 80;
     isAtBottomRef.current = isAtBottom;
-    setShowScrollDown(!isAtBottom && container.scrollHeight > clientHeight + 100);
-    useChatStore.getState().setScrollPosition(chatId, { scrollTop, isAtBottom });
+    setShowScrollDown(
+      !isAtBottom && container.scrollHeight > clientHeight + 100,
+    );
+    useChatStore
+      .getState()
+      .setScrollPosition(chatId, { scrollTop, isAtBottom });
   }, [chatId]);
 
   const markMessagesAsSeen = useCallback(
@@ -328,10 +330,20 @@ export default function ChatPage() {
         },
       );
     },
-    [currentUser, otherUsername, chatId, isSocketReady, markMessagesAsSeen, setMessages],
+    [
+      currentUser,
+      otherUsername,
+      chatId,
+      isSocketReady,
+      markMessagesAsSeen,
+      setMessages,
+    ],
   );
 
   useEffect(() => {
+    // ریست کردن وضعیت اسکرول برای چت جدید
+    initialScrollDoneRef.current = false;
+
     const cached = useChatStore.getState().getMessages(chatId);
     const meta = useChatStore.getState().getMessagesMeta(chatId);
 
@@ -342,20 +354,33 @@ export default function ChatPage() {
     if (cached.length > 0) {
       setIsLoading(false);
       setIsInitialLoadDone(meta?.isInitialLoadDone ?? true);
-      setShowMessages(false);
+      // ========== نمایش بلافاصله پیام‌ها ==========
+      setShowMessages(true);
+      // ============================================
       pageRef.current = meta?.page ?? 0;
       hasMoreRef.current = meta?.hasMore ?? true;
-      initialScrollDoneRef.current = false;
       const saved = useChatStore.getState().getScrollPosition(chatId);
       isAtBottomRef.current = saved?.isAtBottom ?? true;
       setShowScrollDown(saved ? !saved.isAtBottom : false);
+      // تنظیم اسکرول (با تاخیر برای اطمینان از رندر شدن)
+      requestAnimationFrame(() => {
+        const container = messagesContainerRef.current;
+        if (container) {
+          if (saved && !saved.isAtBottom) {
+            container.scrollTop = saved.scrollTop;
+          } else {
+            container.scrollTop = container.scrollHeight;
+          }
+        }
+      });
+      // پرچم اسکرول را true کنید تا useLayoutEffect بعداً اجرا نشود
+      initialScrollDoneRef.current = true;
     } else {
       setIsLoading(true);
       setIsInitialLoadDone(false);
       setShowMessages(false);
       pageRef.current = 0;
       hasMoreRef.current = true;
-      initialScrollDoneRef.current = false;
     }
 
     isLoadingMoreRef.current = false;
@@ -1009,7 +1034,7 @@ export default function ChatPage() {
 
         <div
           ref={messagesContainerRef}
-          className={`absolute inset-0 overflow-y-auto p-4 pt-[84px] pb-28 space-y-2 chat-messages-area ${
+          className={`absolute inset-0 overflow-y-auto p-4 pt-[90px] pb-22 space-y-2 chat-messages-area ${
             showMessages ? "opacity-100" : "opacity-0"
           } [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-track]:bg-transparent`}
           onScroll={handleScroll}
