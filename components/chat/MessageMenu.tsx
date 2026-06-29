@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FiCopy, FiEdit2, FiTrash2, FiMapPin, FiCornerUpLeft } from "react-icons/fi";
+import { FiCopy, FiEdit2, FiTrash2, FiMapPin, FiCornerUpLeft, FiSave } from "react-icons/fi";
+import type { MessageAttachment } from "@/types";
 
 interface Message {
   _id?: string;
@@ -20,6 +21,8 @@ interface MessageMenuProps {
   onReply: (message: Message) => void;
   onClose: () => void;
   position: { x: number; y: number };
+  attachment?: MessageAttachment; // جدید
+  onSaveToGallery?: (attachment: MessageAttachment) => void; // جدید
 }
 
 export default function MessageMenu({ 
@@ -31,14 +34,16 @@ export default function MessageMenu({
   onPin, 
   onReply, 
   onClose, 
-  position 
+  position,
+  attachment,
+  onSaveToGallery,
 }: MessageMenuProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
 
   const getAdjustedPosition = () => {
     const menuWidth = 180;
-    const menuHeight = 220;
+    const menuHeight = 260; // افزایش ارتفاع به خاطر گزینه جدید
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
     
@@ -142,6 +147,17 @@ export default function MessageMenu({
           <FiMapPin size={16} />
           <span>{message.isPinned ? "لغو سنجاق" : "سنجاق کردن"}</span>
         </button>
+
+        {/* گزینه ذخیره در گالری در صورت وجود عکس */}
+        {attachment && onSaveToGallery && (
+          <button
+            onClick={() => { onSaveToGallery(attachment); onClose(); }}
+            className="w-full px-4 py-2.5 text-right hover:bg-[#2a3942] flex items-center gap-3 transition"
+          >
+            <FiSave size={16} />
+            <span>ذخیره در گالری</span>
+          </button>
+        )}
       </div>
     </>
   );

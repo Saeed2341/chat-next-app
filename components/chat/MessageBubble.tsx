@@ -134,7 +134,7 @@ export default function MessageBubble({
               </span>
             )}
 
-            <span className="flex items-center gap-0.5 text-[10px] text-gray-400 leading-none shrink-0">
+            <span className=" flex items-center gap-0.5 text-[10px] text-gray-400 leading-none shrink-0">
               <span>{formatTime(message.time || message.createdAt)}</span>
               {isOwnMessage && (
                 <span className="inline-flex">

@@ -27,6 +27,7 @@ import {
   exportScaledImageFile,
 } from "@/lib/compressImage";
 import { normalizeAttachmentUrls } from "@/lib/mediaUrl";
+import { downloadImageWithProgress, saveImageBlob } from "@/lib/downloadImage"; // <-- جدید
 import type { Message, MessageAttachment } from "@/types";
 
 function normalizeMessage(msg: Message): Message {
@@ -46,7 +47,7 @@ export default function ChatPage() {
     onConfirm: () => void;
     confirmText?: string;
     cancelText?: string;
-    confirmButtonColor?: "red" | "green" | "blue" | "yellow"; // ← رنگ زرد هم اضافه شد
+    confirmButtonColor?: "red" | "green" | "blue" | "yellow";
   }>({
     isOpen: false,
     title: "",
@@ -141,6 +142,27 @@ export default function ChatPage() {
   const fetchedForChatRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
   const scrollSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ========== تابع ذخیره در گالری ==========
+  const handleSaveImageToGallery = useCallback(
+    async (attachment: MessageAttachment, messageId?: string) => {
+      if (!attachment.url) {
+        toast.error("آدرس عکس موجود نیست");
+        return;
+      }
+      try {
+        const blob = await downloadImageWithProgress(attachment.url, () => {});
+        if (blob) {
+          await saveImageBlob(blob, attachment.fileName || "image.jpg");
+          toast.success("عکس در گالری ذخیره شد");
+        }
+      } catch (error) {
+        toast.error("خطا در ذخیره عکس");
+        console.error(error);
+      }
+    },
+    [],
+  );
 
   // ========== useEffectها ==========
   useEffect(() => {
@@ -354,15 +376,12 @@ export default function ChatPage() {
     if (cached.length > 0) {
       setIsLoading(false);
       setIsInitialLoadDone(meta?.isInitialLoadDone ?? true);
-      // ========== نمایش بلافاصله پیام‌ها ==========
       setShowMessages(true);
-      // ============================================
       pageRef.current = meta?.page ?? 0;
       hasMoreRef.current = meta?.hasMore ?? true;
       const saved = useChatStore.getState().getScrollPosition(chatId);
       isAtBottomRef.current = saved?.isAtBottom ?? true;
       setShowScrollDown(saved ? !saved.isAtBottom : false);
-      // تنظیم اسکرول (با تاخیر برای اطمینان از رندر شدن)
       requestAnimationFrame(() => {
         const container = messagesContainerRef.current;
         if (container) {
@@ -373,7 +392,6 @@ export default function ChatPage() {
           }
         }
       });
-      // پرچم اسکرول را true کنید تا useLayoutEffect بعداً اجرا نشود
       initialScrollDoneRef.current = true;
     } else {
       setIsLoading(true);
@@ -496,7 +514,6 @@ export default function ChatPage() {
     toast.success("پیام ویرایش شد");
   };
 
-  // ========== حذف پیام با دیالوگ ==========
   const handleDeleteMessage = (messageId: string) => {
     showConfirmDialog(
       "حذف پیام",
@@ -565,7 +582,6 @@ export default function ChatPage() {
     setMenuVisible({ message: msg, x, y });
   };
 
-  // ========== پاک کردن تاریخچه با دیالوگ ==========
   const handleClearHistory = () => {
     if (!socketRef.current || !currentUser || !otherUsername) return;
 
@@ -1005,6 +1021,15 @@ export default function ChatPage() {
             onReply={handleReply}
             onClose={() => setMenuVisible(null)}
             position={{ x: menuVisible.x, y: menuVisible.y }}
+            attachment={menuVisible.message.attachment} // <-- جدید
+            onSaveToGallery={() => {
+              if (menuVisible.message.attachment) {
+                handleSaveImageToGallery(
+                  menuVisible.message.attachment,
+                  menuVisible.message._id
+                );
+              }
+            }} // <-- جدید
           />
         )}
 

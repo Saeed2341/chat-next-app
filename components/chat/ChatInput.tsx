@@ -84,7 +84,7 @@ export default function ChatInput({
           spellCheck={false}
           data-gramm="false"
           data-form-type="other"
-          className="chat-textarea flex-1 p-3 rounded-2xl bg-white/10 backdrop-blur-sm text-right outline-none focus:ring-2 focus:ring-green-500/50 transition-all text-white placeholder:text-gray-400 border border-white/5 resize-none overflow-y-auto leading-relaxed"
+          className="chat-textarea flex-1 p-3 rounded-4xl bg-white/10 backdrop-blur-sm text-right outline-none focus:ring-2 focus:ring-green-500/50 transition-all text-white placeholder:text-gray-400 border border-white/5 resize-none overflow-y-auto leading-relaxed"
           placeholder={
             replyTo ? "پاسخ خود را بنویسید..." : "پیامت را بنویس..."
           }

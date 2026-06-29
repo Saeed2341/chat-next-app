@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { FiX, FiCheck } from "react-icons/fi";
+import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
 
 interface ImageEditorModalProps {
   file: File;
@@ -14,44 +16,74 @@ export default function ImageEditorModal({
   onConfirm,
   onCancel,
 }: ImageEditorModalProps) {
-  const [scale, setScale] = useState(1);
   const [previewUrl, setPreviewUrl] = useState("");
-  const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
+  const [crop, setCrop] = useState<Crop>({
+    unit: "%",
+    width: 80,
+    height: 80,
+    x: 10,
+    y: 10,
+  });
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
-    const img = new Image();
-    img.onload = () => {
-      setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-    };
-    img.src = url;
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  const displaySize = useMemo(() => {
-    const w = Math.round(naturalSize.w * scale);
-    const h = Math.round(naturalSize.h * scale);
-    const maxW = Math.min(320, window.innerWidth - 48);
-    const ratio = naturalSize.w > 0 ? Math.min(1, maxW / w) : 1;
-    return {
-      w: Math.round(w * ratio),
-      h: Math.round(h * ratio),
-      outW: w,
-      outH: h,
-    };
-  }, [naturalSize, scale]);
+  const handleConfirm = async () => {
+    if (!imgRef.current || !completedCrop) {
+      onConfirm(file, 1);
+      return;
+    }
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+    try {
+      const canvas = document.createElement("canvas");
+      const image = imgRef.current;
+      const crop = completedCrop;
+
+      const scaleX = image.naturalWidth / image.width;
+      const scaleY = image.naturalHeight / image.height;
+
+      canvas.width = crop.width;
+      canvas.height = crop.height;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("No canvas context");
+
+      ctx.drawImage(
+        image,
+        crop.x * scaleX,
+        crop.y * scaleY,
+        crop.width * scaleX,
+        crop.height * scaleY,
+        0,
+        0,
+        crop.width,
+        crop.height,
+      );
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("Failed to create blob"));
+        }, "image/jpeg", 0.92);
+      });
+
+      const croppedFile = new File([blob], file.name, { type: "image/jpeg" });
+      // scale را 1 می‌فرستیم چون برش انجام شده و نیازی به تغییر اندازه نیست
+      onConfirm(croppedFile, 1);
+    } catch (error) {
+      console.error("Crop error:", error);
+      onConfirm(file, 1); // در صورت خطا، فایل اصلی را برگردان
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[95] bg-black/90 flex flex-col">
+      {/* هدر */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <button
           type="button"
@@ -60,52 +92,40 @@ export default function ImageEditorModal({
         >
           <FiX size={22} className="text-white" />
         </button>
-        <span className="text-white font-medium">ویرایش عکس</span>
+        <span className="text-white font-medium">برش عکس</span>
         <button
           type="button"
-          onClick={() => onConfirm(file, scale)}
+          onClick={handleConfirm}
           className="p-2 rounded-full bg-green-500/80 hover:bg-green-500"
         >
           <FiCheck size={22} className="text-white" />
         </button>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6 min-h-0">
+      {/* منطقه برش */}
+      <div className="flex-1 flex items-center justify-center p-4 min-h-0">
         {previewUrl && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={previewUrl}
-            alt="پیش‌نمایش"
-            className="rounded-xl shadow-2xl object-contain max-h-[50vh] transition-all duration-150"
-            style={{
-              width: displaySize.w,
-              height: displaySize.h,
-            }}
-            draggable={false}
-          />
+          <ReactCrop
+            crop={crop}
+            onChange={(c) => setCrop(c)}
+            onComplete={(c) => setCompletedCrop(c)}
+            aspect={undefined} // نسبت ابعاد آزاد
+            className="max-h-full max-w-full"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              ref={imgRef}
+              src={previewUrl}
+              alt="پیش‌نمایش"
+              className="object-contain max-h-[60vh]"
+            />
+          </ReactCrop>
         )}
       </div>
 
-      <div className="p-6 border-t border-white/10 space-y-3">
-        <div className="flex items-center justify-between text-sm text-gray-300">
-          <span>اندازه عکس</span>
-          <span>
-            {displaySize.outW} × {displaySize.outH} px
-          </span>
-        </div>
-        <input
-          type="range"
-          min={30}
-          max={100}
-          value={Math.round(scale * 100)}
-          onChange={(e) => setScale(Number(e.target.value) / 100)}
-          className="w-full accent-green-500"
-        />
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>کوچک‌تر</span>
-          <span>{Math.round(scale * 100)}%</span>
-          <span>اصلی</span>
-        </div>
+      {/* راهنما */}
+      <div className="p-4 text-center text-gray-400 text-sm border-t border-white/10">
+        برای برش، ناحیه مورد نظر را روی تصویر انتخاب کنید.
       </div>
     </div>
   );
