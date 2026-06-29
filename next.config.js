@@ -44,6 +44,7 @@ const withPWA = require('next-pwa')({
   },
   publicExcludes: ['!manifest.json', '!icons/**/*'],
   runtimeCaching,
+  // ===== حذف خط sw: 'sw-custom.js' =====
 });
 
 const nextConfig = {

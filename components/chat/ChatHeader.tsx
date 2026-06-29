@@ -63,6 +63,7 @@ export default function ChatHeader({
           </div>
         </div>
 
+        {/* ===== فقط دکمه منو (بدون دکمه نوتیفیکیشن) ===== */}
         <div className="relative">
           <button
             onClick={onMenuToggle}

@@ -11,7 +11,7 @@ const { connectDB } = require("./lib/db");
 const User = require("./models/User");
 const Message = require("./models/Message");
 
-const SECRET = "secret123";
+const SECRET = process.env.JWT_SECRET || "secret123";
 const dev = process.env.NODE_ENV !== "production";
 
 // Next.js 16 defaults to Turbopack in dev which panics on non-ASCII paths (e.g. Persian Desktop)

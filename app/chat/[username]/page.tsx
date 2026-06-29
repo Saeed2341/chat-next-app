@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
 } from "react";
 import { useRouter, useParams } from "next/navigation";
+import PushNotificationButton from "@/components/chat/PushNotificationButton";
 import { FiTrash2, FiChevronDown } from "react-icons/fi";
 import { connectSocket, restoreSocketSession } from "@/lib/socket";
 import { useAuth } from "@/hooks/useAuth";
@@ -850,6 +851,29 @@ export default function ChatPage() {
           if (isAtBottomRef.current) {
             requestAnimationFrame(() => scrollToBottom());
           }
+
+          // ============================================================
+          // ارسال نوتیفیکیشن در صورت بسته بودن صفحه
+          // ============================================================
+          if (msg.sender === otherUsername && msg.receiver === currentUser) {
+            // فقط اگر صفحه در پس‌زمینه است یا کاربر در صفحه نیست
+            if (typeof document !== "undefined" && document.hidden) {
+              fetch("/api/push/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  userId: currentUser,
+                  message: {
+                    sender: msg.sender,
+                    text: msg.text || "یک عکس جدید",
+                    messageId: msg._id,
+                  },
+                }),
+              }).catch((error) =>
+                console.error("Error sending push notification:", error),
+              );
+            }
+          }
         }
       };
 
@@ -1042,8 +1066,14 @@ export default function ChatPage() {
             isMenuOpen && (
               <div
                 ref={menuRef}
-                className="absolute top-full left-0 mt-2 w-48 bg-[#202c33] backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-2 z-20"
+                className="absolute top-full left-0 mt-2 w-56 bg-[#202c33] backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl shadow-black/40 py-2 z-20"
               >
+                {/* ===== دکمه فعال‌سازی اعلان‌ها ===== */}
+                <div className="px-2 py-1 border-b border-white/5">
+                  <PushNotificationButton className="w-full !bg-transparent hover:!bg-white/5 text-right px-3 py-2 rounded-lg" />
+                </div>
+
+                {/* ===== پاک کردن تاریخچه ===== */}
                 <button
                   onClick={handleClearHistory}
                   className="w-full px-4 py-2.5 text-right hover:bg-white/10 transition-colors duration-200 flex items-center gap-3 text-red-400 hover:text-red-300"
