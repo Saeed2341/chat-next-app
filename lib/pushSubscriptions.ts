@@ -1,6 +1,3 @@
-// lib/pushSubscriptions.ts
-
-// ذخیره‌سازی موقت (در پروژه واقعی از دیتابیس استفاده کنید)
 const subscriptions = new Map<string, PushSubscription>();
 
 export function getPushSubscription(userId: string): PushSubscription | undefined {

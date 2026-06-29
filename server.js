@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const webPush = require("web-push");
 const fs = require("fs");
 const path = require("path");
 
@@ -14,7 +15,15 @@ const Message = require("./models/Message");
 const SECRET = process.env.JWT_SECRET || "secret123";
 const dev = process.env.NODE_ENV !== "production";
 
-// Next.js 16 defaults to Turbopack in dev which panics on non-ASCII paths (e.g. Persian Desktop)
+// تنظیم VAPID
+const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const privateKey = process.env.VAPID_PRIVATE_KEY;
+const email = process.env.VAPID_EMAIL || "cursorsaeed@gmail.com";
+
+if (publicKey && privateKey) {
+  webPush.setVapidDetails("mailto:" + email, publicKey, privateKey);
+}
+
 if (dev && !process.argv.includes("--webpack")) {
   process.argv.push("--webpack");
 }
@@ -24,11 +33,11 @@ const handler = app.getRequestHandler();
 
 const onlineUsers = new Map();
 const socketUsers = new Map();
+const pushSubscriptions = new Map();
 
 app.prepare().then(async () => {
   try {
     await connectDB();
-    console.log("✅ Database connected");
   } catch (err) {
     console.error("❌ Database connection failed:", err);
     process.exit(1);
@@ -67,16 +76,14 @@ app.prepare().then(async () => {
 
   const io = new Server(server, {
     cors: {
-      origin: "*", // اجازه دسترسی از همه آدرس‌ها
+      origin: "*",
       methods: ["GET", "POST"],
       credentials: true,
     },
-    transports: ["websocket", "polling"], // اضافه شود
+    transports: ["websocket", "polling"],
   });
 
   io.on("connection", (socket) => {
-    console.log("🔌 New client connected:", socket.id);
-
     // ================= REGISTER =================
     socket.on("register", async (data, cb) => {
       try {
@@ -136,11 +143,10 @@ app.prepare().then(async () => {
         socketUsers.set(socket.id, username);
         await User.updateOne(
           { username },
-          { isOnline: true, lastSeen: new Date() },
+          { isOnline: true, lastSeen: new Date() }
         );
         await emitUsersToAll(io);
 
-        // برگرداندن توکن در پاسخ
         cb({ token, username });
       } catch (error) {
         console.error("❌ Login error:", error);
@@ -148,7 +154,7 @@ app.prepare().then(async () => {
       }
     });
 
-    // ================= SESSION RESTORE (after refresh/reconnect) =================
+    // ================= SESSION RESTORE =================
     socket.on("session_restore", async ({ token }, cb) => {
       try {
         if (!token) {
@@ -172,7 +178,7 @@ app.prepare().then(async () => {
 
         await User.updateOne(
           { username },
-          { isOnline: true, lastSeen: new Date() },
+          { isOnline: true, lastSeen: new Date() }
         );
 
         await emitUsersToAll(io);
@@ -193,6 +199,13 @@ app.prepare().then(async () => {
 
       const usersList = await buildUsers(currentUsername);
       socket.emit("users_list", usersList);
+    });
+
+    // ================= SAVE PUSH SUBSCRIPTION =================
+    socket.on("save_push_subscription", ({ subscription, userId }) => {
+      if (subscription && userId) {
+        pushSubscriptions.set(userId, subscription);
+      }
     });
 
     // ================= PRIVATE MESSAGE =================
@@ -254,6 +267,25 @@ app.prepare().then(async () => {
             }
           }
 
+          // ===== ارسال نوتیفیکیشن =====
+          if (!onlineUsers.has(receiver)) {
+            const subscription = pushSubscriptions.get(receiver);
+            if (subscription && publicKey && privateKey) {
+              const pushPayload = JSON.stringify({
+                title: `📩 پیام از ${sender}`,
+                body: text || "یک عکس جدید",
+                icon: "/icons/icon-192x192.png",
+                url: `/chat/${sender}`,
+                messageId: msg._id.toString(),
+                sender: sender,
+              });
+
+              webPush
+                .sendNotification(subscription, pushPayload)
+                .catch(() => {});
+            }
+          }
+
           if (cb) {
             cb({ success: true, messageId: msg._id.toString() });
           }
@@ -265,7 +297,7 @@ app.prepare().then(async () => {
             cb({ success: false, error: error.message });
           }
         }
-      },
+      }
     );
 
     // ================= MESSAGE SEEN =================
@@ -273,7 +305,7 @@ app.prepare().then(async () => {
       try {
         await Message.updateMany(
           { _id: { $in: messageIds }, sender, receiver },
-          { seen: true, seenAt: new Date() },
+          { seen: true, seenAt: new Date() }
         );
 
         const senderSocket = onlineUsers.get(sender);
@@ -296,14 +328,12 @@ app.prepare().then(async () => {
         if (cb) {
           cb({ success: false, error: error.message });
         }
-        
       }
     });
 
     // ================= CLEAR CHAT HISTORY =================
     socket.on("clear_chat_history", async ({ user1, user2 }, cb) => {
       try {
-        // حذف همه پیام‌های بین user1 و user2
         await Message.deleteMany({
           $or: [
             { sender: user1, receiver: user2 },
@@ -311,10 +341,8 @@ app.prepare().then(async () => {
           ],
         });
 
-        // به‌روزرسانی لیست کاربران برای هر دو کاربر
         await emitUsersToAll(io);
 
-        // ارسال پاسخ موفقیت
         if (cb) cb({ success: true });
       } catch (error) {
         console.error("❌ Clear chat history error:", error);
@@ -329,7 +357,7 @@ app.prepare().then(async () => {
         try {
           await Message.updateOne(
             { _id: messageId, sender },
-            { text: newText, editedAt: new Date() },
+            { text: newText, editedAt: new Date() }
           );
 
           const receiverSocket = onlineUsers.get(receiver);
@@ -347,7 +375,7 @@ app.prepare().then(async () => {
           console.error("❌ Edit message error:", error);
           if (cb) cb({ success: false, error: error.message });
         }
-      },
+      }
     );
 
     // ================= DELETE MESSAGE =================
@@ -393,7 +421,7 @@ app.prepare().then(async () => {
           console.error("❌ Pin message error:", error);
           if (cb) cb({ success: false, error: error.message });
         }
-      },
+      }
     );
 
     // ================= TYPING INDICATOR =================
@@ -420,25 +448,22 @@ app.prepare().then(async () => {
     });
 
     // ================= LOAD MESSAGES =================
-    // ================= LOAD MESSAGES =================
     socket.on(
       "load_messages",
       async ({ user1, user2, page = 0, limit = 20 }, cb) => {
         try {
           const skip = page * limit;
 
-          // دریافت پیام‌ها با مرتب‌سازی نزولی (جدیدترین اول)
           const messages = await Message.find({
             $or: [
               { sender: user1, receiver: user2 },
               { sender: user2, receiver: user1 },
             ],
           })
-            .sort({ createdAt: -1 }) // جدیدترین اول
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
 
-          // معکوس کردن برای نمایش از قدیم به جدید در کلاینت
           const reversedMessages = [...messages].reverse();
 
           const formattedMessages = reversedMessages.map((msg) => ({
@@ -454,8 +479,8 @@ app.prepare().then(async () => {
                 ? msg.seen
                   ? "seen"
                   : onlineUsers.has(msg.receiver)
-                    ? "delivered"
-                    : "sent"
+                  ? "delivered"
+                  : "sent"
                 : undefined,
             isPinned: msg.isPinned || false,
             editedAt: msg.editedAt || null,
@@ -468,7 +493,7 @@ app.prepare().then(async () => {
           console.error("❌ Load messages error:", error);
           cb([]);
         }
-      },
+      }
     );
 
     // ================= DISCONNECT =================
@@ -492,7 +517,7 @@ app.prepare().then(async () => {
       if (disconnectedUser) {
         await User.updateOne(
           { username: disconnectedUser },
-          { isOnline: false, lastSeen: new Date() },
+          { isOnline: false, lastSeen: new Date() }
         );
         await emitUsersToAll(io);
       }
@@ -500,7 +525,6 @@ app.prepare().then(async () => {
   });
 
   // ================= HELPERS =================
-
   async function buildUsers(currentUsername) {
     try {
       const users = await User.find()
@@ -531,8 +555,8 @@ app.prepare().then(async () => {
               lastMessageStatus = lastMessage.seen
                 ? "seen"
                 : onlineUsers.has(u.username)
-                  ? "delivered"
-                  : "sent";
+                ? "delivered"
+                : "sent";
             }
           }
 
@@ -554,7 +578,7 @@ app.prepare().then(async () => {
             lastMessageId: lastMessage?._id?.toString(),
             unread: unreadCount,
           };
-        }),
+        })
       );
 
       return usersWithDetails.filter(Boolean);

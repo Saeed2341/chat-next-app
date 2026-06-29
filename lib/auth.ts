@@ -1,8 +1,7 @@
-// lib/auth.ts
-import { NextRequest } from 'next/server';
-import jwt from 'jsonwebtoken';
+import { NextRequest } from "next/server";
+import jwt from "jsonwebtoken";
 
-const SECRET = 'secret123';
+const SECRET = process.env.JWT_SECRET || "secret123";
 
 export interface AuthUser {
   username: string;
@@ -11,13 +10,13 @@ export interface AuthUser {
 
 export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
   try {
-    const cookieHeader = req.headers.get('cookie') || '';
+    const cookieHeader = req.headers.get("cookie") || "";
     const tokenMatch = cookieHeader.match(/token=([^;]+)/);
     let token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
-    
+
     if (!token) {
-      const authHeader = req.headers.get('authorization');
-      if (authHeader?.startsWith('Bearer ')) {
+      const authHeader = req.headers.get("authorization");
+      if (authHeader?.startsWith("Bearer ")) {
         token = authHeader.substring(7);
       }
     }
@@ -28,7 +27,7 @@ export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
 
     const decoded = jwt.verify(token, SECRET) as { username: string; userId: string };
     return { username: decoded.username, userId: decoded.userId };
-  } catch (error) {
+  } catch {
     return null;
   }
 }
